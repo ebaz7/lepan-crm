@@ -818,6 +818,8 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t10.Field_006 as InvoiceNum,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
+                    t10.Field_009 as OpCode,
+                    t10.Field_009 as OpCode,
                     t11.Field_005 as ItemCode,
                     t22.Field_004 as ItemName,
                     t11.Field_006 as Quantity,
@@ -837,9 +839,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     GROUP BY t21_sub.Field_004
                 ) t_group ON t11.Field_005 = t_group.ItemCode
                 LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                WHERE t10.Field_009 IN ('3', '12', '23')
-                  AND t11.Field_036 = t10.Field_009
-                  AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
+                WHERE (
+                    (t10.Field_009 IN ('3', '12', '23') AND t11.Field_036 = t10.Field_009 AND t11.Field_007 > 0)
+                    OR
+                    (t10.Field_009 = '13' AND t11.Field_036 IN ('3', '12', '23', '13'))
+                  )
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
@@ -908,16 +912,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly, and Selected Range)
     const getSalesOverviewStats = () => {
         const stats = {
-            todayAmt: 0,
-            todayQty: 0,
-            monthAmt: 0,
-            monthQty: 0,
-            quarterAmt: 0,
-            quarterQty: 0,
-            yearAmt: 0,
-            yearQty: 0,
-            rangeAmt: 0,
-            rangeQty: 0
+            todayAmt: 0, todayQty: 0, todayRetAmt: 0, todayRetQty: 0,
+            monthAmt: 0, monthQty: 0, monthRetAmt: 0, monthRetQty: 0,
+            quarterAmt: 0, quarterQty: 0, quarterRetAmt: 0, quarterRetQty: 0,
+            yearAmt: 0, yearQty: 0, yearRetAmt: 0, yearRetQty: 0,
+            rangeAmt: 0, rangeQty: 0, rangeRetAmt: 0, rangeRetQty: 0
         };
 
         const now = new Date();
@@ -1314,24 +1313,56 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
     // Prepare chart comparison data grouped by Product Group
     const getComparisonChartData = () => {
-        const groups: { [key: string]: { name: string; amountA: number; weightA: number; amountB: number; weightB: number; } } = {};
+        const groups: { [key: string]: { 
+            name: string; 
+            amountA: number; weightA: number; retAmountA: number; retWeightA: number; netAmountA: number; netWeightA: number;
+            amountB: number; weightB: number; retAmountB: number; retWeightB: number; netAmountB: number; netWeightB: number;
+        } } = {};
+
+        const initGroup = (grp: string) => {
+            if (!groups[grp]) {
+                groups[grp] = { 
+                    name: grp, 
+                    amountA: 0, weightA: 0, retAmountA: 0, retWeightA: 0, netAmountA: 0, netWeightA: 0,
+                    amountB: 0, weightB: 0, retAmountB: 0, retWeightB: 0, netAmountB: 0, netWeightB: 0
+                };
+            }
+        };
 
         compareSalesDataA.forEach(row => {
             const grp = row.GroupName || 'سایر گروه‌ها';
-            if (!groups[grp]) {
-                groups[grp] = { name: grp, amountA: 0, weightA: 0, amountB: 0, weightB: 0 };
+            initGroup(grp);
+            const amt = parseFloat(row.Amount || 0);
+            const qty = parseFloat(row.Quantity || 0);
+            if (row.OpCode === '13') {
+                groups[grp].retAmountA += amt;
+                groups[grp].retWeightA += qty;
+                groups[grp].netAmountA -= amt;
+                groups[grp].netWeightA -= qty;
+            } else {
+                groups[grp].amountA += amt;
+                groups[grp].weightA += qty;
+                groups[grp].netAmountA += amt;
+                groups[grp].netWeightA += qty;
             }
-            groups[grp].amountA += parseFloat(row.Amount || 0);
-            groups[grp].weightA += parseFloat(row.Quantity || 0);
         });
 
         compareSalesDataB.forEach(row => {
             const grp = row.GroupName || 'سایر گروه‌ها';
-            if (!groups[grp]) {
-                groups[grp] = { name: grp, amountA: 0, weightA: 0, amountB: 0, weightB: 0 };
+            initGroup(grp);
+            const amt = parseFloat(row.Amount || 0);
+            const qty = parseFloat(row.Quantity || 0);
+            if (row.OpCode === '13') {
+                groups[grp].retAmountB += amt;
+                groups[grp].retWeightB += qty;
+                groups[grp].netAmountB -= amt;
+                groups[grp].netWeightB -= qty;
+            } else {
+                groups[grp].amountB += amt;
+                groups[grp].weightB += qty;
+                groups[grp].netAmountB += amt;
+                groups[grp].netWeightB += qty;
             }
-            groups[grp].amountB += parseFloat(row.Amount || 0);
-            groups[grp].weightB += parseFloat(row.Quantity || 0);
         });
 
         return Object.values(groups);
@@ -2783,12 +2814,14 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     const netW = parseNetWeight(row);
                                                     const grossW = parseGrossWeight(row);
                                                     const fee = parseFee(row, netW);
+                                                    const isRet = row.OpCode === '13';
                                                     return (
-                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                        <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${isRet ? 'bg-rose-50' : ''}`}>
                                                             <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
                                                             <td className="p-3 font-mono text-slate-600 font-semibold">{row.InvoiceNum || row.DocId}</td>
                                                             <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
                                                             <td className="p-3 font-semibold text-slate-900">
+                                                                {isRet ? <span className="bg-rose-100 text-rose-700 px-1 py-0.5 rounded text-[9px] ml-1">مرجوعی</span> : null}
                                                                 {row.ItemName || 'کالای فروخته شده'}
                                                                 {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
                                                             </td>
@@ -2810,38 +2843,131 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         chartData.length === 0 ? (
                                             <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</div>
                                         ) : (
-                                            chartData.map((row, idx) => {
-                                                const weightDiff = row.weightB ? ((row.weightA - row.weightB) / row.weightB) * 100 : 0;
-                                                const amountDiff = row.amountB ? ((row.amountA - row.amountB) / row.amountB) * 100 : 0;
+                                            <>
+                                            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2 justify-between items-center">
+                                                <h4 className="text-sm font-bold text-slate-800">گزارش مقایسه ای فروش (A نسبت به B)</h4>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            const printWindow = window.open('', '_blank');
+                                                            if (!printWindow) return;
+                                                            let html = '<html dir="rtl"><head><title>چاپ مقایسه فروش</title><style>body{font-family:Tahoma,sans-serif;margin:20px;direction:rtl}table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#f1f5f9}.diff{direction:ltr;display:inline-block}.ret{color:#e11d48;font-size:10px}</style></head><body>';
+                                                            html += '<h2>گزارش مقایسه ای فروش</h2>';
+                                                            html += '<table><thead><tr><th>گروه کالا</th><th>خالص A (kg)</th><th>مبلغ A (ریال)</th><th>خالص B (kg)</th><th>مبلغ B (ریال)</th><th>رشد مبلغ</th></tr></thead><tbody>';
+                                                            let sumA = 0, sumB = 0;
+                                                            chartData.forEach(row => {
+                                                                sumA += row.netAmountA || 0;
+                                                                sumB += row.netAmountB || 0;
+                                                                const diff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
+                                                                html += `<tr>
+                                                                    <td><strong>${row.name}</strong></td>
+                                                                    <td>${(row.netWeightA || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightA || 0).toFixed(2)}</span></td>
+                                                                    <td>${(row.netAmountA || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountA || 0).toLocaleString('fa-IR')}</span></td>
+                                                                    <td>${(row.netWeightB || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightB || 0).toFixed(2)}</span></td>
+                                                                    <td>${(row.netAmountB || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountB || 0).toLocaleString('fa-IR')}</span></td>
+                                                                    <td class="diff" style="color: ${diff>=0?'#16a34a':'#dc2626'}">${diff>0?'+':''}${diff.toFixed(1)}%</td>
+                                                                </tr>`;
+                                                            });
+                                                            const totDiff = sumB ? ((sumA - sumB) / sumB) * 100 : 0;
+                                                            html += `<tr>
+                                                                <th>جمع کل</th>
+                                                                <th>-</th>
+                                                                <th>${sumA.toLocaleString('fa-IR')}</th>
+                                                                <th>-</th>
+                                                                <th>${sumB.toLocaleString('fa-IR')}</th>
+                                                                <th class="diff" style="color: ${totDiff>=0?'#16a34a':'#dc2626'}">${totDiff>0?'+':''}${totDiff.toFixed(1)}%</th>
+                                                            </tr>`;
+                                                            html += '</tbody></table></body></html>';
+                                                            printWindow.document.write(html);
+                                                            printWindow.document.close();
+                                                            printWindow.focus();
+                                                            setTimeout(() => { printWindow.print(); }, 500);
+                                                        }}
+                                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                                    >
+                                                        <Printer className="w-3.5 h-3.5" />
+                                                        چاپ (Print)
+                                                    </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch('/api/sayan/sales-report/send-compare', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ chartData, dateFromA: dateFrom, dateToA: dateTo, dateFromB: salesDateFromB, dateToB: salesDateToB })
+                                                            });
+                                                            const data = await res.json();
+                                                            if (res.ok && data.success) {
+                                                                alert(`✅ ${data.message}`);
+                                                            } else {
+                                                                alert(`❌ خطا در ارسال: ${data.error || 'ناشناخته'}`);
+                                                            }
+                                                        } catch (err) {
+                                                            alert('❌ خطای ارتباط با سرور');
+                                                        }
+                                                    }}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                                                >
+                                                    <Send className="w-3.5 h-3.5" />
+                                                    ارسال دستی به ربات
+                                                </button>
+                                            </div>
+                                            {chartData.map((row, idx) => {
+                                                const weightDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;
+                                                const amountDiff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
+                                                const avgFeeA = row.netWeightA ? (row.netAmountA / row.netWeightA) : 0;
+                                                const avgFeeB = row.netWeightB ? (row.netAmountB / row.netWeightB) : 0;
                                                 return (
-                                                    <div key={idx} className="p-4 space-y-3">
+                                                    <div key={idx} className="p-4 space-y-3 border-b border-slate-100 last:border-0">
                                                         <h4 className="text-sm font-black text-slate-900">{row.name}</h4>
                                                         <div className="grid grid-cols-2 gap-3 text-xs">
                                                             <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
-                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه وزن (kg)</span>
-                                                                <div className="flex justify-between items-center text-[10px]">
-                                                                    <span className="font-mono font-bold text-slate-700">{row.weightA.toFixed(1)} <span className="text-[8px] text-slate-400">A</span></span>
-                                                                    <span className="font-mono text-slate-400">/</span>
-                                                                    <span className="font-mono font-bold text-slate-700">{row.weightB.toFixed(1)} <span className="text-[8px] text-slate-400">B</span></span>
+                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه وزن خالص (kg)</span>
+                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed space-y-0.5">
+                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
+                                                                        <span>A: {row.netWeightA.toFixed(1)}</span>
+                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold" title="مرجوعی A">م {row.retWeightA.toFixed(1)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
+                                                                        <span>B: {row.netWeightB.toFixed(1)}</span>
+                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold" title="مرجوعی B">م {row.retWeightB.toFixed(1)}</span>
+                                                                    </div>
                                                                 </div>
                                                                 <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${weightDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                                    {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}% تغییر وزن
+                                                                    {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}% تغییر خالص
                                                                 </span>
                                                             </div>
                                                             <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
-                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه مبلغ (ریال)</span>
-                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed">
-                                                                    <div>A: {formatMoney(row.amountA)}</div>
-                                                                    <div>B: {formatMoney(row.amountB)}</div>
+                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه مبلغ خالص و میانگین فی (ریال)</span>
+                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed space-y-0.5">
+                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
+                                                                        <span className="flex flex-col">
+                                                                            <span>A: {formatMoney(row.netAmountA)}</span>
+                                                                            <span className="text-[8px] text-indigo-500 font-sans font-bold">میانگین فی: {formatMoney(avgFeeA)}</span>
+                                                                        </span>
+                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold flex flex-col items-end" title="مرجوعی A">
+                                                                            <span>مبلغ: م {formatMoney(row.retAmountA)}</span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
+                                                                        <span className="flex flex-col">
+                                                                            <span>B: {formatMoney(row.netAmountB)}</span>
+                                                                            <span className="text-[8px] text-indigo-500 font-sans font-bold">میانگین فی: {formatMoney(avgFeeB)}</span>
+                                                                        </span>
+                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold flex flex-col items-end" title="مرجوعی B">
+                                                                            <span>مبلغ: م {formatMoney(row.retAmountB)}</span>
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
                                                                 <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${amountDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                                    {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}% تغییر مبلغ
+                                                                    {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}% تغییر مبلغ خالص
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 );
-                                            })
+                                            })}
+                                            </>
                                         )
                                     ) : (
                                         salesData.length === 0 ? (
@@ -2851,13 +2977,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                 const netW = parseNetWeight(row);
                                                 const grossW = parseGrossWeight(row);
                                                 const fee = parseFee(row, netW);
+                                                const isRet = row.OpCode === '13';
                                                 return (
-                                                    <div key={idx} className="p-4 space-y-2 text-xs">
+                                                    <div key={idx} className={`p-4 space-y-2 text-xs ${isRet ? 'bg-rose-50' : ''}`}>
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-[10px] text-slate-400 font-bold font-mono">فاکتور: {row.InvoiceNum || row.DocId} | {formatDateToJalali(row.Date)}</span>
                                                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
                                                         </div>
                                                         <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
+                                                            {isRet ? <span className="bg-rose-100 text-rose-700 px-1 py-0.5 rounded text-[9px] ml-1">مرجوعی</span> : null}
                                                             {row.ItemName || 'کالای فروخته شده'}
                                                             {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{row.ItemNotes}</span>}
                                                         </h4>
