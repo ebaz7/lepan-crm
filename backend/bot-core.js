@@ -2077,9 +2077,9 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
         const isEdit = eventType === 'EDIT';
         const isDelete = eventType === 'DELETE';
         
-        // Deduplicate the same permit + status notification to avoid "Machine Gun" bursts
+        // Deduplicate the same permit + status notification to avoid "Machine Gun" bursts unless MANUAL
         const dedupeKey = `EXIT_${p.id}_${p.status}_${eventType}`;
-        if (isDuplicateNotification(dedupeKey) && eventType !== 'MANUAL') return;
+        if (eventType !== 'MANUAL' && isDuplicateNotification(dedupeKey)) return;
         
         const imgPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: false });
         const imgNoPrice = await Renderer.generateRecordImage(p, 'EXIT', { isEdit, isDelete, forceHidePrices: true });
@@ -2111,11 +2111,13 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
                 s.exitPermitFirstGroupConfig?.baleId,
                 s.exitPermitSecondGroupConfig?.groupId,
                 s.exitPermitSecondGroupConfig?.telegramId,
-                s.exitPermitSecondGroupConfig?.baleId
+                s.exitPermitSecondGroupConfig?.baleId,
+                s.exitPermitThirdGroupConfig?.groupId,
+                s.exitPermitThirdGroupConfig?.telegramId,
+                s.exitPermitThirdGroupConfig?.baleId
             ].filter(Boolean).map(x => String(x));
             
             const strId = String(id);
-            // Also detect by ID pattern (Telegram groups start with -)
             return logisticsIds.includes(strId) || strId.startsWith('-') || strId.includes('@g.us');
         };
 
@@ -2124,7 +2126,6 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             let goodsList = '';
             if (p.items && p.items.length > 0) {
                 goodsList = p.items.map((it, idx) => {
-                    // Force hide price if it's a logistics group or as per general rule for factory groups
                     const priceTxt = (!hidePrice && it.price) ? ` (فی: ${Number(it.price).toLocaleString()} ریال)` : '';
                     return `${idx + 1}. ${it.goodsName} (${it.cartonCount} عدد)${priceTxt}`;
                 }).join('\n');
@@ -2151,142 +2152,167 @@ export const notifyExitPermitStep = async (p, platform, chatId, sendPhotoFn, db,
             return `${header}\n🏢 شرکت: ${p.company || '-'}\n🔢 شماره: ${p.permitNumber}\n📅 تاریخ: ${toShamsiFull(p.date)}\n👤 گیرنده: ${p.recipientName || '-'}\n📦 کالاها:\n${goodsList}\n${countLine}\n👤 ثبت کننده: ${p.requester || '-'}\n📍 مقصد: ${p.destinationAddress || '-'}\n🚛 راننده: ${p.driverName || '-'} (پلاک: ${p.plateNumber || '-'}) | تماس: ${p.driverPhone || '-'}${p.status === 'خارج شده (بایگانی)' && p.exitTime ? `\n🕒 ساعت خروج نهایی: ${p.exitTime}` : (p.exitTime ? `\n🕒 ساعت خروج: ${p.exitTime}` : '')}${approversLine}\n📝 توضیحات: ${p.description || '-'}\n\n✅ *مرحله:* ${stepName}\n🔄 *وضعیت:* ${p.status}${isEdit ? '\n⚠️ *این یک پیام ویرایشی است*' : ''}${isDelete ? '\n⚠️ *این سند حذف شده است*' : ''}`;
         };
 
-        // Notify the user who did the action (if possible)
+        // 1. Direct notify to requester / caller if passed
         if (chatId && sendPhotoFn) {
             const userCaption = generateCaption(chatId);
             const userImg = isLogisticsGroup(chatId) ? imgNoPrice : imgPrice;
             sendPhotoFn(platform, chatId, userImg, userCaption).catch(e => console.error("User Notify Error:", e));
         }
 
-        // Map Persian Status to Internal Key for checking settings
-        let statusKey = p.status;
-        if (eventType === 'DELETE') {
-            statusKey = 'REJECTED'; 
-        } else if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات' || p.status === 'در انتظار تایید مدیرعامل') {
-            statusKey = 'CREATE';
-        } else if (p.status === 'خارج شده (بایگانی)' || p.status === 'خارج شد') {
-            // This is the final archived state
-            statusKey = 'ARCHIVED'; 
-        }
-
-        let targetGroups = [];
-
-        // Group 1 logic (Settings-based routing)
-        const g1Config = settings.exitPermitFirstGroupConfig || { activeStatuses: [] };
-        if (g1Config.activeStatuses && g1Config.activeStatuses.includes(statusKey)) {
-            targetGroups.push(1);
-        }
-        
-        // Group 2 logic (Settings-based routing)
-        const g2Config = settings.exitPermitSecondGroupConfig || { activeStatuses: [] };
-        if (g2Config.activeStatuses && g2Config.activeStatuses.includes(statusKey)) {
-            targetGroups.push(2);
-        }
-
-        // Group 3 logic (Settings-based routing)
-        const g3Config = settings.exitPermitThirdGroupConfig || { activeStatuses: [] };
-        if (g3Config.activeStatuses && g3Config.activeStatuses.includes(statusKey)) {
-            targetGroups.push(3);
-        }
-
-        // --- NEW: Customer Notification with Proforma Image ---
-        if (p.status === 'خارج شده (بایگانی)' && !isEdit && !isDelete) {
-            const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : (p.driverPhone || null);
-            if (customerPhone) {
-                (async () => {
-                    try {
-                        const amount = (p.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0);
-                        const customerCaption = `✨ *فاکتور نهایی خروج کالا #${p.permitNumber}*\n\n` +
-                                              `👤 خریدار: *${p.recipientName || '-'}*\n` +
-                                              `⚖️ وزن کل: ${p.weight} کیلوگرم\n` +
-                                              `📦 تعداد کل: ${p.cartonCount} کارتن\n` +
-                                              `💵 مبلغ کل: ${amount.toLocaleString()} ریال\n` +
-                                              (p.driverName ? `👨‍✈️ راننده: ${p.driverName}\n` : '') +
-                                              (p.plateNumber ? `🆔 پلاک: ${p.plateNumber}\n` : '') +
-                                              `🕒 ساعت خروج: ${p.exitTime || '-'}\n\n` +
-                                              `✅ کالای شما با موفقیت بارگیری و از کارخانه خارج شد. تصویر فاکتور رسمی پیوست گردید.\n\nبا سپاس از اعتماد شما 🙏`;
-                        
-                        const customerImg = await Renderer.generateRecordImage(p, 'CUSTOMER_INVOICE');
-                        const imgB64 = customerImg.toString('base64');
-
-                        // 1. WhatsApp
-                        if (whatsapp && typeof whatsapp.sendMessage === 'function') {
-                            await whatsapp.sendMessage(customerPhone, customerCaption, {
-                                data: imgB64,
-                                mimeType: 'image/png',
-                                filename: `invoice-${p.permitNumber}.png`
-                            });
-                        }
-
-                        // 2. Telegram / Bale (Via bot-core helper)
-                        await sendBotMessageByPhone(customerPhone, customerCaption, imgB64);
-
-                        console.log(`✅ Professional proforma sent to customer: ${customerPhone}`);
-                    } catch (e) {
-                        console.error("❌ Customer proforma notification failed:", e.message);
-                    }
-                })();
+        // 2. Direct notify to CEOs / Managers on registration or initial step
+        const users = Array.isArray(db.users) ? db.users : [];
+        if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات' || p.status === 'در انتظار تایید مدیرعامل') {
+            const ceos = users.filter(u => u.role === 'ceo' || u.role === 'sales_manager' || u.role === 'admin' || (u.roles && (u.roles.includes('ceo') || u.roles.includes('sales_manager'))));
+            for (const c of ceos) {
+                const caption = generateCaption(c.phoneNumber || c.telegramChatId || c.baleChatId);
+                if (c.phoneNumber && whatsapp && typeof whatsapp.sendMessage === 'function') {
+                    whatsapp.sendMessage(c.phoneNumber, caption, { data: Buffer.from(imgPrice).toString('base64'), mimeType: 'image/png', filename: 'permit.png' }).catch(e => {});
+                }
+                if (c.telegramChatId) {
+                    import('./telegram.js').then(m => m.sendBotPhoto?.(c.telegramChatId, imgPrice, caption)).catch(e => {});
+                }
+                if (c.baleChatId) {
+                    import('./bale.js').then(m => m.sendBotPhoto?.(c.baleChatId, imgPrice, caption)).catch(e => {});
+                }
             }
         }
 
-        // Distinctly and separately fire off to all targets, without await to prevent blocking
-        for (const gNum of targetGroups) {
+        // 3. Determine Group Targets (Group 1, Group 2, Group 3) IN STRICT ORDER
+        const g1Config = settings.exitPermitFirstGroupConfig || {};
+        const g2Config = settings.exitPermitSecondGroupConfig || {};
+        const g3Config = settings.exitPermitThirdGroupConfig || {};
+
+        const isGroupActive = (gConfig, isG1Fallback = false) => {
+            const activeStatuses = (gConfig && Array.isArray(gConfig.activeStatuses)) ? gConfig.activeStatuses : [];
+            if (isG1Fallback && activeStatuses.length === 0) return true;
+            if (activeStatuses.length === 0) return false;
+
+            if (activeStatuses.includes(p.status)) return true;
+
+            const possibleKeys = [p.status];
+            if (isDelete || p.status === 'رد شده' || p.status === 'REJECTED') possibleKeys.push('REJECTED', 'رد شده');
+            if (p.status === 'کنسل شده' || p.status === 'CANCELED') possibleKeys.push('CANCELED', 'کنسل شده');
+            if (stepName === 'ثبت اولیه' || stepName === 'ثبت توسط ربات' || p.status === 'در انتظار تایید مدیرعامل' || p.status === 'PENDING_CEO') possibleKeys.push('CREATE', 'در انتظار تایید مدیرعامل', 'PENDING_CEO');
+            if (p.status === 'در انتظار مدیر کارخانه' || p.status === 'PENDING_FACTORY') possibleKeys.push('PENDING_FACTORY', 'در انتظار مدیر کارخانه');
+            if (p.status === 'در انتظار تایید انبار' || p.status === 'PENDING_WAREHOUSE') possibleKeys.push('PENDING_WAREHOUSE', 'در انتظار تایید انبار');
+            if (p.status === 'در انتظار خروج (انتظامات)' || p.status === 'در انتظار خروج' || p.status === 'PENDING_SECURITY') possibleKeys.push('PENDING_SECURITY', 'در انتظار خروج (انتظامات)', 'در انتظار خروج');
+            if (p.status === 'در انتظار تایید نهایی مدیر کارخانه' || p.status === 'PENDING_FACTORY_FINAL') possibleKeys.push('PENDING_FACTORY_FINAL', 'در انتظار تایید نهایی مدیر کارخانه');
+            if (p.status === 'خارج شده (بایگانی)' || p.status === 'خارج شد' || p.status === 'ARCHIVED' || p.status === 'EXITED') possibleKeys.push('ARCHIVED', 'EXITED', 'خارج شده (بایگانی)', 'خارج شد');
+
+            return possibleKeys.some(k => activeStatuses.includes(k));
+        };
+
+        const targetGroupNums = [];
+        if (isGroupActive(g1Config, true)) targetGroupNums.push(1);
+        if (isGroupActive(g2Config, false)) targetGroupNums.push(2);
+        if (isGroupActive(g3Config, false)) targetGroupNums.push(3);
+
+        const companyConfig = settings.companyNotifications?.[p.company] || {};
+
+        for (const gNum of targetGroupNums) {
             let tgGroupId = '';
             let baleGroupId = '';
             let waGroupId = '';
-            let companyConfig = settings.companyNotifications?.[p.company] || {};
 
             if (gNum === 1) {
-                const g1Config = settings.exitPermitFirstGroupConfig || {};
                 tgGroupId = g1Config.telegramId || companyConfig.telegramChannelId || settings.exitPermitNotificationTelegramId || '';
                 baleGroupId = g1Config.baleId || companyConfig.baleChannelId || settings.exitPermitNotificationBaleId || '';
                 waGroupId = g1Config.groupId || companyConfig.warehouseGroup || settings.exitPermitNotificationGroup || settings.defaultWarehouseGroup || '';
             } else if (gNum === 2) {
-                tgGroupId = g2Config.telegramId;
-                baleGroupId = g2Config.baleId;
-                waGroupId = g2Config.groupId;
+                tgGroupId = g2Config.telegramId || '';
+                baleGroupId = g2Config.baleId || '';
+                waGroupId = g2Config.groupId || '';
             } else if (gNum === 3) {
-                const g3Config = settings.exitPermitThirdGroupConfig || {};
-                tgGroupId = g3Config.telegramId;
-                baleGroupId = g3Config.baleId;
-                waGroupId = g3Config.groupId;
+                tgGroupId = g3Config.telegramId || '';
+                baleGroupId = g3Config.baleId || '';
+                waGroupId = g3Config.groupId || '';
             }
 
-            // Fire Telegram
+            // Send Telegram
             if (tgGroupId && settings.telegramBotToken) {
                 const cleanId = sanitizeGroupId(tgGroupId);
                 const targetCaption = generateCaption(cleanId);
                 const targetImg = isLogisticsGroup(cleanId) ? imgNoPrice : imgPrice;
-                import('./telegram.js').then(mod => {
-                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error("TG Group Notify Error:", e));
-                }).catch(e => console.error("TG Import Error", e));
+                try {
+                    const tgMod = await import('./telegram.js');
+                    if (tgMod?.sendBotPhoto) {
+                        await tgMod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error(`[ExitPermit G${gNum}] TG send failed:`, e.message));
+                    }
+                } catch (e) {
+                    console.error(`[ExitPermit G${gNum}] TG import/send error:`, e.message);
+                }
             }
 
-            // Fire Bale
+            // Send Bale
             if (baleGroupId && settings.baleBotToken) {
                 const cleanId = sanitizeGroupId(baleGroupId);
                 const targetCaption = generateCaption(cleanId);
                 const targetImg = isLogisticsGroup(cleanId) ? imgNoPrice : imgPrice;
-                import('./bale.js').then(mod => {
-                    if (mod?.sendBotPhoto) mod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error("Bale Group Notify Error:", e));
-                }).catch(e => console.error("Bale Import Error", e));
+                try {
+                    const baleMod = await import('./bale.js');
+                    if (baleMod?.sendBotPhoto) {
+                        await baleMod.sendBotPhoto(cleanId, targetImg, targetCaption).catch(e => console.error(`[ExitPermit G${gNum}] Bale send failed:`, e.message));
+                    }
+                } catch (e) {
+                    console.error(`[ExitPermit G${gNum}] Bale import/send error:`, e.message);
+                }
             }
 
-            // Fire WhatsApp
+            // Send WhatsApp
             if (waGroupId && settings.whatsappEnabled) {
                 const targetCaption = generateCaption(waGroupId);
                 const targetImg = isLogisticsGroup(waGroupId) ? imgNoPrice : imgPrice;
-                import('./whatsapp.js').then(mod => {
-                    if (mod?.sendMessage) {
+                try {
+                    const waMod = await import('./whatsapp.js');
+                    if (waMod?.sendMessage) {
                         const buffer = Buffer.from(targetImg);
                         const b64 = buffer.toString('base64');
-                        mod.sendMessage(waGroupId, targetCaption, { data: b64, mimeType: 'image/png', filename: 'permit.png' })
-                            .catch(e => console.error("WA Group Notify Error:", e));
+                        await waMod.sendMessage(waGroupId, targetCaption, { data: b64, mimeType: 'image/png', filename: 'permit.png' })
+                            .catch(e => console.error(`[ExitPermit G${gNum}] WA send failed:`, e.message));
                     }
-                }).catch(e => console.error("WA Import Error", e));
+                } catch (e) {
+                    console.error(`[ExitPermit G${gNum}] WA import/send error:`, e.message);
+                }
             }
         }
-    } catch (e) { console.error("Notification Helper Error:", e); }
+
+        // 4. Send Customer Final Invoice on Archived
+        if (p.status === 'خارج شده (بایگانی)' && !isEdit && !isDelete) {
+            const customerPhone = (p.destinations && p.destinations[0]) ? p.destinations[0].phone : (p.driverPhone || null);
+            if (customerPhone) {
+                try {
+                    const amount = (p.items||[]).reduce((sum, item) => sum + ((item.deliveredCartonCount ?? item.cartonCount ?? 0) * (item.price || 0)), 0);
+                    const customerCaption = `✨ *فاکتور نهایی خروج کالا #${p.permitNumber}*\n\n` +
+                                          `👤 خریدار: *${p.recipientName || '-'}*\n` +
+                                          `⚖️ وزن کل: ${p.weight} کیلوگرم\n` +
+                                          `📦 تعداد کل: ${p.cartonCount} کارتن\n` +
+                                          `💵 مبلغ کل: ${amount.toLocaleString()} ریال\n` +
+                                          (p.driverName ? `👨‍✈️ راننده: ${p.driverName}\n` : '') +
+                                          (p.plateNumber ? `🆔 پلاک: ${p.plateNumber}\n` : '') +
+                                          `🕒 ساعت خروج: ${p.exitTime || '-'}\n\n` +
+                                          `✅ کالای شما با موفقیت بارگیری و از کارخانه خارج شد. تصویر فاکتور پیوست گردید.\n\nبا سپاس از اعتماد شما 🙏`;
+                    
+                    const customerImg = await Renderer.generateRecordImage(p, 'CUSTOMER_INVOICE');
+                    const imgB64 = customerImg.toString('base64');
+
+                    if (whatsapp && typeof whatsapp.sendMessage === 'function') {
+                        await whatsapp.sendMessage(customerPhone, customerCaption, {
+                            data: imgB64,
+                            mimeType: 'image/png',
+                            filename: `invoice-${p.permitNumber}.png`
+                        }).catch(e => {});
+                    }
+
+                    await sendBotMessageByPhone(customerPhone, customerCaption, imgB64).catch(e => {});
+                } catch (e) {
+                    console.error("❌ Customer proforma notification failed:", e.message);
+                }
+            }
+        }
+
+    } catch (e) {
+        console.error("Notification Helper Error:", e);
+    }
 };
 
 export const notifyPaymentOrderStep = async (o, db, stepName, isFinal = false, eventType = 'STEP') => {

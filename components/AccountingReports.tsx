@@ -95,6 +95,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
     const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
+    const [applyOfficialTax, setApplyOfficialTax] = useState<boolean>(true);
 
     // --- TAB 4: PRODUCTION STATE ---
     const [prodLiveItems, setProdLiveItems] = useState<any[]>([]);
@@ -818,6 +819,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t10.Field_006 as InvoiceNum,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
+                    t10.Field_009 as DocType,
                     t11.Field_005 as ItemCode,
                     t22.Field_004 as ItemName,
                     t11.Field_006 as Quantity,
@@ -837,17 +839,28 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     GROUP BY t21_sub.Field_004
                 ) t_group ON t11.Field_005 = t_group.ItemCode
                 LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                WHERE t10.Field_009 IN ('3', '12', '23')
+                WHERE t10.Field_009 IN ('3', '12', '23', '4', '13', '24')
                   AND t11.Field_036 = t10.Field_009
                   AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
-            const processedA = dataA.map((row: any) => ({
-                ...row,
-                Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
-            }));
+            const processedA = dataA.map((row: any) => {
+                const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
+                const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
+                const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
+                const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
+                return {
+                    ...row,
+                    DocType: docTypeStr,
+                    IsReturn: isReturn,
+                    IsOfficial: isOfficial,
+                    RawAmount: rawAmt,
+                    Amount: rawAmt.toString()
+                };
+            });
             setSalesData(processedA);
             setCompareSalesDataA(processedA);
 
@@ -866,6 +879,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
+                    t10.Field_009 as DocType,
                         t11.Field_005 as ItemCode,
                         t22.Field_004 as ItemName,
                         t11.Field_006 as Quantity,
@@ -885,17 +899,28 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         GROUP BY t21_sub.Field_004
                     ) t_group ON t11.Field_005 = t_group.ItemCode
                     LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
-                    WHERE t10.Field_009 IN ('3', '12', '23')
+                    WHERE t10.Field_009 IN ('3', '12', '23', '4', '13', '24')
                       AND t11.Field_036 = t10.Field_009
                       AND t11.Field_007 IS NOT NULL AND t11.Field_007 > 0
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
-                const processedB = dataB.map((row: any) => ({
-                    ...row,
-                    Amount: row.Amount ? parseFloat(row.Amount).toString() : '0'
-                }));
+                const processedB = dataB.map((row: any) => {
+                    const docTypeStr = String(row.DocType || row.Field_009 || '').trim();
+                    const isReturn = ['4', '13', '24'].includes(docTypeStr) || (row.Notes || '').includes('مرجوع') || (row.Notes || '').includes('برگشت');
+                    const notesStr = String(row.Notes || '') + ' ' + String(row.ItemNotes || '');
+                    const isOfficial = (notesStr.includes('رسمی') && !notesStr.includes('غیر رسمی')) || row.InvoiceNum === '123' || String(row.CustomerName || '').includes('اندیشه خلاق رایکا') || notesStr.includes('ارزش افزوده');
+                    const rawAmt = row.Amount ? parseFloat(row.Amount) : 0;
+                    return {
+                        ...row,
+                        DocType: docTypeStr,
+                        IsReturn: isReturn,
+                        IsOfficial: isOfficial,
+                        RawAmount: rawAmt,
+                        Amount: rawAmt.toString()
+                    };
+                });
                 setCompareSalesDataB(processedB);
             }
         } catch (err: any) {
@@ -908,66 +933,176 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly, and Selected Range)
     const getSalesOverviewStats = () => {
         const stats = {
-            todayAmt: 0,
-            todayQty: 0,
-            monthAmt: 0,
-            monthQty: 0,
-            quarterAmt: 0,
-            quarterQty: 0,
-            yearAmt: 0,
-            yearQty: 0,
-            rangeAmt: 0,
-            rangeQty: 0
+            todaySalesAmt: 0, todaySalesQty: 0, todayReturnAmt: 0, todayReturnQty: 0, todayNetAmt: 0, todayNetQty: 0, todayAvgPrice: 0,
+            monthSalesAmt: 0, monthSalesQty: 0, monthReturnAmt: 0, monthReturnQty: 0, monthNetAmt: 0, monthNetQty: 0, monthAvgPrice: 0,
+            quarterSalesAmt: 0, quarterSalesQty: 0, quarterReturnAmt: 0, quarterReturnQty: 0, quarterNetAmt: 0, quarterNetQty: 0, quarterAvgPrice: 0,
+            yearSalesAmt: 0, yearSalesQty: 0, yearReturnAmt: 0, yearReturnQty: 0, yearNetAmt: 0, yearNetQty: 0, yearAvgPrice: 0,
+            rangeSalesAmt: 0, rangeSalesQty: 0, rangeReturnAmt: 0, rangeReturnQty: 0, rangeNetAmt: 0, rangeNetQty: 0, rangeAvgPrice: 0,
+            todayAmt: 0, todayQty: 0, monthAmt: 0, monthQty: 0, quarterAmt: 0, quarterQty: 0, yearAmt: 0, yearQty: 0, rangeAmt: 0, rangeQty: 0
         };
-
         const now = new Date();
         const jNow = jalaali.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
         salesData.forEach(row => {
             const date = new Date(row.Date);
             const qty = parseFloat(row.Quantity || 0);
-            
-            // Fix: Sayan might return a unit price or pre-calculated amount. 
-            // We use parseFloat and if it's unusually small relative to qty, it might need multiplication,
-            // but we'll stick to summing up the raw amount provided by the query.
-            // If the user says it's showing less, it could be we need to sum up invoice totals from another field,
-            // or simply the query is missing some invoice types.
-            const amt = parseFloat(row.Amount || 0);
+            const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
+            const amt = (row.IsOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            const isRet = row.IsReturn;
 
-            // Add to selected range totals
-            stats.rangeAmt += amt;
-            stats.rangeQty += qty;
-            
+            if (isRet) {
+                stats.rangeReturnAmt += amt;
+                stats.rangeReturnQty += qty;
+            } else {
+                stats.rangeSalesAmt += amt;
+                stats.rangeSalesQty += qty;
+            }
+
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
-
-            // Yearly (Current Persian Year)
             if (jRow.jy === jNow.jy) {
-                stats.yearAmt += amt;
-                stats.yearQty += qty;
+                if (isRet) {
+                    stats.yearReturnAmt += amt;
+                    stats.yearReturnQty += qty;
+                } else {
+                    stats.yearSalesAmt += amt;
+                    stats.yearSalesQty += qty;
+                }
 
-                // Monthly (Current Persian Month)
                 if (jRow.jm === jNow.jm) {
-                    stats.monthAmt += amt;
-                    stats.monthQty += qty;
+                    if (isRet) {
+                        stats.monthReturnAmt += amt;
+                        stats.monthReturnQty += qty;
+                    } else {
+                        stats.monthSalesAmt += amt;
+                        stats.monthSalesQty += qty;
+                    }
 
-                    // Daily (Current Persian Day)
                     if (jRow.jd === jNow.jd) {
-                        stats.todayAmt += amt;
-                        stats.todayQty += qty;
+                        if (isRet) {
+                            stats.todayReturnAmt += amt;
+                            stats.todayReturnQty += qty;
+                        } else {
+                            stats.todaySalesAmt += amt;
+                            stats.todaySalesQty += qty;
+                        }
                     }
                 }
 
-                // Quarterly
                 const rowQuarter = Math.ceil(jRow.jm / 3);
                 const nowQuarter = Math.ceil(jNow.jm / 3);
                 if (rowQuarter === nowQuarter) {
-                    stats.quarterAmt += amt;
-                    stats.quarterQty += qty;
+                    if (isRet) {
+                        stats.quarterReturnAmt += amt;
+                        stats.quarterReturnQty += qty;
+                    } else {
+                        stats.quarterSalesAmt += amt;
+                        stats.quarterSalesQty += qty;
+                    }
                 }
             }
         });
 
+        stats.rangeNetQty = stats.rangeSalesQty - stats.rangeReturnQty;
+        stats.rangeNetAmt = stats.rangeSalesAmt - stats.rangeReturnAmt;
+        stats.rangeAvgPrice = stats.rangeNetQty > 0 ? Math.round(stats.rangeNetAmt / stats.rangeNetQty) : 0;
+        stats.rangeAmt = stats.rangeNetAmt;
+        stats.rangeQty = stats.rangeNetQty;
+
+        stats.todayNetQty = stats.todaySalesQty - stats.todayReturnQty;
+        stats.todayNetAmt = stats.todaySalesAmt - stats.todayReturnAmt;
+        stats.todayAvgPrice = stats.todayNetQty > 0 ? Math.round(stats.todayNetAmt / stats.todayNetQty) : 0;
+        stats.todayAmt = stats.todayNetAmt;
+        stats.todayQty = stats.todayNetQty;
+
+        stats.monthNetQty = stats.monthSalesQty - stats.monthReturnQty;
+        stats.monthNetAmt = stats.monthSalesAmt - stats.monthReturnAmt;
+        stats.monthAvgPrice = stats.monthNetQty > 0 ? Math.round(stats.monthNetAmt / stats.monthNetQty) : 0;
+        stats.monthAmt = stats.monthNetAmt;
+        stats.monthQty = stats.monthNetQty;
+
+        stats.quarterNetQty = stats.quarterSalesQty - stats.quarterReturnQty;
+        stats.quarterNetAmt = stats.quarterSalesAmt - stats.quarterReturnAmt;
+        stats.quarterAvgPrice = stats.quarterNetQty > 0 ? Math.round(stats.quarterNetAmt / stats.quarterNetQty) : 0;
+        stats.quarterAmt = stats.quarterNetAmt;
+        stats.quarterQty = stats.quarterNetQty;
+
+        stats.yearNetQty = stats.yearSalesQty - stats.yearReturnQty;
+        stats.yearNetAmt = stats.yearSalesAmt - stats.yearReturnAmt;
+        stats.yearAvgPrice = stats.yearNetQty > 0 ? Math.round(stats.yearNetAmt / stats.yearNetQty) : 0;
+        stats.yearAmt = stats.yearNetAmt;
+        stats.yearQty = stats.yearNetQty;
+
         return stats;
+    };
+
+    const getAveragePriceTableData = () => {
+        const currentList = salesViewMode === 'range' ? salesData : getTodayInvoices();
+        const map = new Map<string, {
+            groupName: string;
+            itemName: string;
+            salesQty: number;
+            salesAmt: number;
+            returnQty: number;
+            returnAmt: number;
+            netQty: number;
+            netAmt: number;
+            avgPrice: number;
+        }>();
+
+        currentList.forEach(row => {
+            const groupName = row.GroupName || row.groupName || row.ItemName || row.itemName || 'سایر کالاها';
+            const itemName = row.ItemName || row.itemName || 'کالا';
+            const key = groupName;
+
+            const qty = parseFloat(row.Quantity || 0);
+            const rawAmt = parseFloat(row.RawAmount || row.Amount || 0);
+            const amt = (row.IsOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            const isRet = row.IsReturn;
+
+            if (!map.has(key)) {
+                map.set(key, {
+                    groupName,
+                    itemName,
+                    salesQty: 0,
+                    salesAmt: 0,
+                    returnQty: 0,
+                    returnAmt: 0,
+                    netQty: 0,
+                    netAmt: 0,
+                    avgPrice: 0
+                });
+            }
+
+            const item = map.get(key)!;
+            if (isRet) {
+                item.returnQty += qty;
+                item.returnAmt += amt;
+            } else {
+                item.salesQty += qty;
+                item.salesAmt += amt;
+            }
+        });
+
+        const list = Array.from(map.values()).map(item => {
+            item.netQty = item.salesQty - item.returnQty;
+            item.netAmt = item.salesAmt - item.returnAmt;
+            item.avgPrice = item.netQty > 0 ? Math.round(item.netAmt / item.netQty) : 0;
+            return item;
+        });
+
+        const totals = list.reduce((acc, curr) => {
+            acc.salesQty += curr.salesQty;
+            acc.salesAmt += curr.salesAmt;
+            acc.returnQty += curr.returnQty;
+            acc.returnAmt += curr.returnAmt;
+            acc.netQty += curr.netQty;
+            acc.netAmt += curr.netAmt;
+            return acc;
+        }, { salesQty: 0, salesAmt: 0, returnQty: 0, returnAmt: 0, netQty: 0, netAmt: 0 });
+
+        const overallAvgPrice = totals.netQty > 0 ? Math.round(totals.netAmt / totals.netQty) : 0;
+
+        return { list, totals, overallAvgPrice };
     };
 
     const getTodayInvoices = () => {
@@ -981,19 +1116,37 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         return salesData.filter(row => formatDateToJalali(row.Date) === targetDate);
     };
 
-    const handleSendSalesBotReport = async (targetDate: 'today' | 'yesterday') => {
-        const label = targetDate === 'today' ? 'امروز' : 'دیروز';
-        if (!confirm(`آیا از ارسال گزارش فروش ${label} به گروه‌های تلگرام / بله اطمینان دارید؟`)) return;
+    const handleSendSalesBotReport = async (targetDate: 'today' | 'yesterday' | 'range') => {
+        const label = targetDate === 'today' ? 'امروز' : (targetDate === 'yesterday' ? 'دیروز' : `${dateFrom} تا ${dateTo}`);
+        if (!confirm(`آیا از تولید PDF و ارسال گزارش تحلیلی فروش و مرجوعی ${label} به گروه‌های تلگرام / بله اطمینان دارید؟`)) return;
         setIsSendingSalesBot(true);
+        
         try {
+            let dataToSend = [];
+            if (targetDate === 'range') {
+                dataToSend = salesData;
+            } else {
+                const targetD = targetDate === 'today' ? formatDateToJalali(new Date().toISOString()) : (() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 1);
+                    return formatDateToJalali(d.toISOString());
+                })();
+                dataToSend = salesData.filter(row => formatDateToJalali(row.Date) === targetD);
+            }
+            
             const res = await fetch('/api/sayan/sales-report/send-manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetDate })
+                body: JSON.stringify({ 
+                    targetDate,
+                    dateRangeLabel: label,
+                    salesData: dataToSend,
+                    applyOfficialTax
+                })
             });
             const data = await res.json();
             if (data.success) {
-                toast.success(data.message || `گزارش فروش ${label} با موفقیت ارسال شد.`);
+                toast.success(data.message || `گزارش تحلیلی فروش و مرجوعی ${label} به همراه PDF با موفقیت ارسال شد.`);
             } else {
                 toast.error(data.error || 'خطا در ارسال گزارش فروش.');
             }
@@ -2355,6 +2508,16 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <Printer className="w-3.5 h-3.5" />
                                     <span>فرم چاپی فروش دوره‌ای (PDF)</span>
                                 </button>
+                                
+                                <button 
+                                    onClick={() => handleSendSalesBotReport('range')}
+                                    disabled={isSendingSalesBot}
+                                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+                                    title="ارسال آمار دوره‌ای (بازه زمانی انتخاب شده) به کانال‌ها و گروه‌های بله و تلگرام"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>{isSendingSalesBot ? 'در حال ارسال بازه...' : 'ارسال فروش دوره‌ای به بات'}</span>
+                                </button>
 
                                 <button 
                                     onClick={() => handleSendSalesBotReport('today')}
@@ -2401,6 +2564,15 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     />
                                     <span className="text-xs font-bold text-slate-700">فعال‌سازی مقایسه دو بازه</span>
                                 </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg border border-emerald-200 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={applyOfficialTax}
+                                        onChange={(e) => setApplyOfficialTax(e.target.checked)}
+                                        className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-xs font-bold text-emerald-800">۱۰٪ ارزش افزوده رسمی (فاکتورهای رسمی)</span>
+                                </label>
                             </div>
                         </div>
 
@@ -2444,44 +2616,121 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             </div>
                         )}
 
+                        
                         {/* Top-level overviews for Period A */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                            <div className="bg-blue-50/80 rounded-xl p-4 border border-blue-200 shadow-sm col-span-2 md:col-span-1">
-                                <div className="text-blue-700 font-bold text-[10px]">فروش بازه انتخاب‌شده</div>
-                                <div className="text-lg font-black text-blue-900 mt-2 font-mono">
-                                    {formatMoney(stats.rangeAmt)} <span className="text-[10px] font-bold">ریال</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-blue-50/90 rounded-xl p-4 border border-blue-200 shadow-sm">
+                                <div className="text-blue-700 font-bold text-xs flex justify-between items-center">
+                                    <span>فروش ناخالص بازه</span>
+                                    <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-mono">Gross Sales</span>
                                 </div>
-                                <div className="text-[10px] text-blue-600 font-semibold mt-1">وزن: {stats.rangeQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
+                                <div className="text-xl font-black text-blue-950 mt-2 font-mono">
+                                    {formatMoney(stats.rangeSalesAmt)} <span className="text-xs font-bold">ریال</span>
+                                </div>
+                                <div className="text-xs text-blue-700 font-bold mt-1">وزن: {stats.rangeSalesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امروز</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.todayAmt)} <span className="text-[10px] font-bold">ریال</span>
+
+                            <div className="bg-rose-50/90 rounded-xl p-4 border border-rose-200 shadow-sm">
+                                <div className="text-rose-700 font-bold text-xs flex justify-between items-center">
+                                    <span>مرجوعی (برگشت از فروش)</span>
+                                    <span className="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-mono">Returns</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.todayQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-xl font-black text-rose-950 mt-2 font-mono">
+                                    {formatMoney(stats.rangeReturnAmt)} <span className="text-xs font-bold">ریال</span>
+                                </div>
+                                <div className="text-xs text-rose-700 font-bold mt-1">وزن: {stats.rangeReturnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش این ماه</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.monthAmt)} <span className="text-[10px] font-bold">ریال</span>
+
+                            <div className="bg-emerald-50/90 rounded-xl p-4 border border-emerald-200 shadow-sm">
+                                <div className="text-emerald-800 font-bold text-xs flex justify-between items-center">
+                                    <span>فروش خالص برآیند</span>
+                                    <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-mono">Net Sales</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.monthQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-xl font-black text-emerald-950 mt-2 font-mono">
+                                    {formatMoney(stats.rangeNetAmt)} <span className="text-xs font-bold">ریال</span>
+                                </div>
+                                <div className="text-xs text-emerald-700 font-bold mt-1">وزن خالص: {stats.rangeNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش فصل جاری</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.quarterAmt)} <span className="text-[10px] font-bold">ریال</span>
+
+                            <div className="bg-amber-50/90 rounded-xl p-4 border border-amber-200 shadow-sm">
+                                <div className="text-amber-800 font-bold text-xs flex justify-between items-center">
+                                    <span>میانگین قیمت فروش خالص</span>
+                                    <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-mono">Avg Price / Kg</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.quarterQty.toFixed(1)} کیلوگرم</div>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امسال</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.yearAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                <div className="text-xl font-black text-amber-950 mt-2 font-mono">
+                                    {formatMoney(stats.rangeAvgPrice)} <span className="text-xs font-bold">ریال / ک‌گ</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.yearQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-[11px] text-amber-700 font-medium mt-1">حاصل تقسیم مبلغ خالص به وزن خالص</div>
                             </div>
                         </div>
+
+                        {/* Average Price Table Component */}
+                        {(() => {
+                            const { list, totals, overallAvgPrice } = getAveragePriceTableData();
+                            return (
+                                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6">
+                                    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                            <h3 className="text-sm font-bold text-slate-800">جدول تحلیلی میانگین قیمت فروش و مرجوعی (به تفکیک محصول)</h3>
+                                        </div>
+                                        <span className="text-xs font-mono text-slate-500 font-semibold bg-white border border-slate-200 px-2.5 py-1 rounded-md">
+                                            مبلغ خالص ÷ وزن خالص
+                                        </span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-right text-xs">
+                                            <thead>
+                                                <tr className="bg-slate-100/70 text-slate-600 border-b border-slate-200 font-bold">
+                                                    <th className="p-3 text-center w-12">#</th>
+                                                    <th className="p-3">گروه کالا / محصول</th>
+                                                    <th className="p-3 text-center text-blue-700">وزن فروش (ک‌گ)</th>
+                                                    <th className="p-3 text-left text-blue-700">مبلغ فروش (ریال)</th>
+                                                    <th className="p-3 text-center text-rose-700">وزن مرجوعی (ک‌گ)</th>
+                                                    <th className="p-3 text-left text-rose-700">مبلغ مرجوعی (ریال)</th>
+                                                    <th className="p-3 text-center text-emerald-800 bg-emerald-50/50">وزن خالص (ک‌گ)</th>
+                                                    <th className="p-3 text-left text-emerald-800 bg-emerald-50/50">مبلغ خالص (ریال)</th>
+                                                    <th className="p-3 text-center text-amber-900 bg-amber-50/60 font-black">میانگین قیمت (ریال/ک‌گ)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {list.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={9} className="p-6 text-center text-slate-400">هیچ داده‌ای برای نمایش میانگین قیمت وجود ندارد.</td>
+                                                    </tr>
+                                                ) : (
+                                                    list.map((row, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                            <td className="p-3 font-bold text-slate-800">{row.groupName}</td>
+                                                            <td className="p-3 text-center font-mono font-semibold text-blue-700">{row.salesQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono text-blue-700">{formatMoney(row.salesAmt)}</td>
+                                                            <td className="p-3 text-center font-mono font-semibold text-rose-700">{row.returnQty > 0 ? row.returnQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '-'}</td>
+                                                            <td className="p-3 text-left font-mono text-rose-700">{row.returnAmt > 0 ? formatMoney(row.returnAmt) : '-'}</td>
+                                                            <td className="p-3 text-center font-mono font-bold text-emerald-800 bg-emerald-50/30">{row.netQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-emerald-800 bg-emerald-50/30">{formatMoney(row.netAmt)}</td>
+                                                            <td className="p-3 text-center font-mono font-black text-amber-900 bg-amber-50/40">{formatMoney(row.avgPrice)}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-slate-200/80 font-bold border-t-2 border-slate-300">
+                                                    <td colSpan={2} className="p-3 text-right text-slate-800">جمع کل (برآیند)</td>
+                                                    <td className="p-3 text-center font-mono text-blue-800">{totals.salesQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono text-blue-800">{formatMoney(totals.salesAmt)}</td>
+                                                    <td className="p-3 text-center font-mono text-rose-800">{totals.returnQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono text-rose-800">{formatMoney(totals.returnAmt)}</td>
+                                                    <td className="p-3 text-center font-mono text-emerald-900 bg-emerald-100/80">{totals.netQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono text-emerald-900 bg-emerald-100/80">{formatMoney(totals.netAmt)}</td>
+                                                    <td className="p-3 text-center font-mono text-amber-950 bg-amber-200/80 text-sm">{formatMoney(overallAvgPrice)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Today's Invoices Table */}
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">

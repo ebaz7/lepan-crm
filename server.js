@@ -249,82 +249,6 @@ const setupAutoBackup = () => {
     activeBackupJob = cron.schedule(`0 */${intervalHours} * * *`, performAutoBackup);
 };
 
-const setupDailyReports = () => {
-    // Schedule daily reports for 23:45 Tehran time
-    // Cron runs in UTC. Tehran is UTC+3:30. So 23:45 Tehran is 20:15 UTC.
-    cron.schedule('15 20 * * *', async () => {
-        console.log(">>> Running Automatic Daily Reports...");
-        const db = getDb();
-        const settings = db.settings || {};
-        
-        // Get Tehran current date in Shamsi format for the report
-        const now = new Date();
-        const dateStr = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
-        
-        // Groups to notify
-        const targets = [];
-        
-        // 1. Accounting Groups
-        if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele, type: 'accounting' });
-        if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale, type: 'accounting' });
-        if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId, type: 'accounting' }); // Fallback
-
-        // 2. Bijak Groups
-        if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
-        if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
-
-        // 3. Exit Permit Groups (First, Second, Third, and/or Dedicated based on configuration)
-        const sendToFirst = settings.dailyExitReportSendToFirstGroup !== false;
-        const sendToSecond = settings.dailyExitReportSendToSecondGroup === true;
-        const sendToThird = settings.dailyExitReportSendToThirdGroup === true;
-        const sendToDedicated = settings.dailyExitReportSendToDedicatedGroup === true;
-
-        if (sendToFirst) {
-            if (settings.exitPermitNotificationTelegramId) targets.push({ platform: 'telegram', id: settings.exitPermitNotificationTelegramId, type: 'exit' });
-            if (settings.exitPermitNotificationBaleId) targets.push({ platform: 'bale', id: settings.exitPermitNotificationBaleId, type: 'exit' });
-            
-            if (settings.exitPermitFirstGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitFirstGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitFirstGroupConfig.baleId, type: 'exit' });
-        }
-        
-        if (sendToSecond) {
-            if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
-        }
-
-        if (sendToThird) {
-            if (settings.exitPermitThirdGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'exit' });
-            if (settings.exitPermitThirdGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitThirdGroupConfig.baleId, type: 'exit' });
-        }
-
-        if (sendToDedicated) {
-            if (settings.dailyExitReportDedicatedTelegramId) targets.push({ platform: 'telegram', id: settings.dailyExitReportDedicatedTelegramId, type: 'exit' });
-            if (settings.dailyExitReportDedicatedBaleId) targets.push({ platform: 'bale', id: settings.dailyExitReportDedicatedBaleId, type: 'exit' });
-        }
-
-        // Remove duplicates
-        const uniqueTargets = Array.from(new Set(targets.map(t => `${t.platform}:${t.id}`)))
-            .map(uid => targets.find(t => `${t.platform}:${t.id}` === uid));
-
-        for (const target of uniqueTargets) {
-            try {
-                const sendFn = async (id, txt, opts) => {
-                    if (target.platform === 'telegram') return telegram.sendBotMessage(id, txt, opts);
-                    if (target.platform === 'bale') return bale.sendBotMessage(id, txt, opts);
-                };
-                const sendDocFn = async (id, buf, name, cap) => {
-                    if (target.platform === 'telegram') return telegram.sendBotDocument(id, buf, name, cap);
-                    if (target.platform === 'bale') return bale.sendBotDocument(id, buf, name, cap);
-                };
-                
-                console.log(`[Cron] Sending daily report to ${target.platform} group ${target.id}`);
-                await runDailyReport(target.platform, target.id, dateStr, sendFn, sendDocFn);
-            } catch (e) {
-                console.error(`[Cron] Failed to send daily report to ${target.id}:`, e.message);
-            }
-        }
-    });
-
 // Helper to build Persian captioned production report
 const buildProductionCaption = (dateStr, totals, waste) => {
     let dateObj = new Date();
@@ -373,23 +297,47 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     const shamsiDate = utils.toShamsiFull(dateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
     const gregDate = utils.getTehranDateString(dateObj);
 
+    const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === 'string' && settings.telegramBotToken.trim());
+    const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === 'string' && settings.baleBotToken.trim());
+
     const salesTargets = targetsOverride ? [...targetsOverride] : [];
     if (!targetsOverride) {
         if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
         if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
+        if (settings.dailySalesWhatsappGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.dailySalesWhatsappGroupId });
         if (settings.botAccountingGroupIdTele) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
         if (settings.botAccountingGroupIdBale) salesTargets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
+        if (settings.botAccountingGroupIdWhatsApp) salesTargets.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
         if (settings.botAccountingGroupId) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupId });
         if (settings.reportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.reportsGroupId });
         if (settings.telegramReportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId });
+        if (settings.telegramReportsGroupId2) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId2 });
         if (settings.baleReportsGroupId) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId });
+        if (settings.baleReportsGroupId2) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId2 });
+        if (settings.whatsappReportsGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId });
+        if (settings.whatsappReportsGroupId2) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId2 });
         if (settings.telegramChatId) salesTargets.push({ platform: 'telegram', id: settings.telegramChatId });
         if (settings.baleChatId) salesTargets.push({ platform: 'bale', id: settings.baleChatId });
+
+        if (db.groups && Array.isArray(db.groups)) {
+            db.groups.forEach(g => {
+                if (g.chatId) salesTargets.push({ platform: g.platform || 'telegram', id: g.chatId });
+            });
+        }
     }
 
     const uniqueSalesTargets = [];
     const seenMap = new Set();
     for (const t of salesTargets) {
+        if (t.platform === 'telegram' && !isTelegramConfigured) {
+            console.log(`[Sales Report] Skipping Telegram target ${t.id} because Telegram token is not set.`);
+            continue;
+        }
+        if (t.platform === 'bale' && !isBaleConfigured) {
+            console.log(`[Sales Report] Skipping Bale target ${t.id} because Bale token is not set.`);
+            continue;
+        }
+
         const cleanId = utils.sanitizeGroupId(t.id);
         if (!cleanId) continue;
         const key = `${t.platform}_${cleanId}`;
@@ -400,7 +348,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     }
 
     if (uniqueSalesTargets.length === 0) {
-        throw new Error('گروهی برای ارسال گزارش فروش (تلگرام یا بله) در تنظیمات سیستم ثبت نشده است.');
+        throw new Error('هیچ گروه‌ یا چت فعالی برای پیام‌رسان‌های تنظیم‌شده (بله یا تلگرام) یافت نشد. لطفاً آیدی گروه بله/تلگرام و توکن ربات مربوطه را در تنظیمات وارد کنید.');
     }
 
     // Fetch sales data from Sayan ERP
@@ -491,6 +439,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*\n📅 *تاریخ:* ${shamsiDate}\n🧾 تعداد اقلام فروخته شده: ${groupedRows.length}\n⚖️ مجموع مقدار: ${totalQty.toLocaleString('fa-IR')} کیلوگرم\n💵 جمع مبلغ: ${totalAmt.toLocaleString('fa-IR')} ریال`;
 
         let successfulSends = 0;
+        let lastErr = null;
         for (const tgt of uniqueSalesTargets) {
             try {
                 if (tgt.platform === 'telegram') {
@@ -499,18 +448,30 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                 } else if (tgt.platform === 'bale') {
                     await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
                     successfulSends++;
+                } else if (tgt.platform === 'whatsapp') {
+                    const wa = await safeImport('./backend/whatsapp.js');
+                    if (wa && wa.sendMessage) {
+                        await wa.sendMessage(tgt.id, caption, {
+                            data: pdfBuffer.toString('base64'),
+                            mimeType: 'application/pdf',
+                            filename: filename
+                        });
+                        successfulSends++;
+                    }
                 }
             } catch (e) {
+                lastErr = e.message;
                 console.error(`[Manual/Auto Sales Report] Failed to send to ${tgt.platform} group ${tgt.id}:`, e.message);
             }
         }
         if (successfulSends === 0) {
-            throw new Error('ارسال گزارش فروش بایت خطا در اتصال یا تنظیمات پیام‌رسان‌ها ناموفق بود.');
+            throw new Error(`ارسال گزارش فروش ناموفق بود: ${lastErr || 'خطا در اتصال به پیام‌رسان‌ها'}`);
         }
         return { count: salesRows.length, totalQty, totalAmt, sent: true, successfulSends };
     } else {
         const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
         let successfulSends = 0;
+        let lastErr = null;
         for (const tgt of uniqueSalesTargets) {
             try {
                 if (tgt.platform === 'telegram') {
@@ -519,14 +480,100 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                 } else if (tgt.platform === 'bale') {
                     await bale.sendBotMessage(tgt.id, emptyMsg);
                     successfulSends++;
+                } else if (tgt.platform === 'whatsapp') {
+                    const wa = await safeImport('./backend/whatsapp.js');
+                    if (wa && wa.sendMessage) {
+                        await wa.sendMessage(tgt.id, emptyMsg);
+                        successfulSends++;
+                    }
                 }
             } catch (e) {
+                lastErr = e.message;
                 console.error(`[Manual/Auto Sales Report] Failed to send empty msg to ${tgt.platform} group ${tgt.id}:`, e.message);
             }
         }
-        return { count: 0, sent: successfulSends > 0, successfulSends };
+        if (successfulSends === 0) {
+            throw new Error(`ارسال پیام عدم وجود فاکتور فروش ناموفق بود: ${lastErr || 'خطا در پیام‌رسان‌ها'}`);
+        }
+        return { count: 0, sent: true, successfulSends };
     }
 };
+const setupDailyReports = () => {
+    // Schedule daily reports for 23:45 Tehran time
+    // Cron runs in UTC. Tehran is UTC+3:30. So 23:45 Tehran is 20:15 UTC.
+    cron.schedule('15 20 * * *', async () => {
+        console.log(">>> Running Automatic Daily Reports...");
+        const db = getDb();
+        const settings = db.settings || {};
+        
+        // Get Tehran current date in Shamsi format for the report
+        const now = new Date();
+        const dateStr = utils.toShamsiFull(now.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
+        
+        // Groups to notify
+        const targets = [];
+        
+        // 1. Accounting Groups
+        if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele, type: 'accounting' });
+        if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale, type: 'accounting' });
+        if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId, type: 'accounting' }); // Fallback
+
+        // 2. Bijak Groups
+        if (settings.botBijakGroupId) targets.push({ platform: 'telegram', id: settings.botBijakGroupId, type: 'bijak' });
+        if (settings.botBijakGroupIdBale) targets.push({ platform: 'bale', id: settings.botBijakGroupIdBale, type: 'bijak' });
+
+        // 3. Exit Permit Groups (First, Second, Third, and/or Dedicated based on configuration)
+        const sendToFirst = settings.dailyExitReportSendToFirstGroup !== false;
+        const sendToSecond = settings.dailyExitReportSendToSecondGroup === true;
+        const sendToThird = settings.dailyExitReportSendToThirdGroup === true;
+        const sendToDedicated = settings.dailyExitReportSendToDedicatedGroup === true;
+
+        if (sendToFirst) {
+            if (settings.exitPermitNotificationTelegramId) targets.push({ platform: 'telegram', id: settings.exitPermitNotificationTelegramId, type: 'exit' });
+            if (settings.exitPermitNotificationBaleId) targets.push({ platform: 'bale', id: settings.exitPermitNotificationBaleId, type: 'exit' });
+            
+            if (settings.exitPermitFirstGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitFirstGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitFirstGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitFirstGroupConfig.baleId, type: 'exit' });
+        }
+        
+        if (sendToSecond) {
+            if (settings.exitPermitSecondGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitSecondGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitSecondGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitSecondGroupConfig.baleId, type: 'exit' });
+        }
+
+        if (sendToThird) {
+            if (settings.exitPermitThirdGroupConfig?.telegramId) targets.push({ platform: 'telegram', id: settings.exitPermitThirdGroupConfig.telegramId, type: 'exit' });
+            if (settings.exitPermitThirdGroupConfig?.baleId) targets.push({ platform: 'bale', id: settings.exitPermitThirdGroupConfig.baleId, type: 'exit' });
+        }
+
+        if (sendToDedicated) {
+            if (settings.dailyExitReportDedicatedTelegramId) targets.push({ platform: 'telegram', id: settings.dailyExitReportDedicatedTelegramId, type: 'exit' });
+            if (settings.dailyExitReportDedicatedBaleId) targets.push({ platform: 'bale', id: settings.dailyExitReportDedicatedBaleId, type: 'exit' });
+        }
+
+        // Remove duplicates
+        const uniqueTargets = Array.from(new Set(targets.map(t => `${t.platform}:${t.id}`)))
+            .map(uid => targets.find(t => `${t.platform}:${t.id}` === uid));
+
+        for (const target of uniqueTargets) {
+            try {
+                const sendFn = async (id, txt, opts) => {
+                    if (target.platform === 'telegram') return telegram.sendBotMessage(id, txt, opts);
+                    if (target.platform === 'bale') return bale.sendBotMessage(id, txt, opts);
+                };
+                const sendDocFn = async (id, buf, name, cap) => {
+                    if (target.platform === 'telegram') return telegram.sendBotDocument(id, buf, name, cap);
+                    if (target.platform === 'bale') return bale.sendBotDocument(id, buf, name, cap);
+                };
+                
+                console.log(`[Cron] Sending daily report to ${target.platform} group ${target.id}`);
+                await runDailyReport(target.platform, target.id, dateStr, sendFn, sendDocFn);
+            } catch (e) {
+                console.error(`[Cron] Failed to send daily report to ${target.id}:`, e.message);
+            }
+        }
+    });
+
 
     // Schedule daily automated reports for 19:00 Tehran time (15:30 UTC)
     cron.schedule('30 15 * * *', async () => {
@@ -2689,7 +2736,7 @@ app.post('/api/settings', (req, res) => {
 
     const oldSettings = db.settings || {};
     db.settings = { ...db.settings, ...newSettings }; 
-    saveDb(db); 
+    dbManager.saveDbImmediate(db); 
 
     // Auto-restart bots if tokens changed
     if (newSettings.telegramBotToken && newSettings.telegramBotToken !== oldSettings.telegramBotToken) {
@@ -3281,20 +3328,29 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         const filename = `Production_Report_${dateFrom.replace(/[\/\\]/g, '-')}.pdf`;
         const settings = db.settings || {};
         
+        const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === 'string' && settings.telegramBotToken.trim());
+        const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === 'string' && settings.baleBotToken.trim());
+
         // Collect target chat/group IDs
         const targetIds = [];
-        if (settings.telegramChatId) targetIds.push({ platform: 'telegram', id: settings.telegramChatId });
-        if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
-        if (settings.factoryGroupId) targetIds.push({ platform: 'telegram', id: settings.factoryGroupId });
-        if (settings.accountingGroupId) targetIds.push({ platform: 'telegram', id: settings.accountingGroupId });
         if (settings.productionTelegramGroupId) targetIds.push({ platform: 'telegram', id: settings.productionTelegramGroupId });
         if (settings.productionBaleGroupId) targetIds.push({ platform: 'bale', id: settings.productionBaleGroupId });
+        if (settings.productionWhatsappGroupId) targetIds.push({ platform: 'whatsapp', id: settings.productionWhatsappGroupId });
+        if (settings.factoryGroupId) targetIds.push({ platform: 'telegram', id: settings.factoryGroupId });
+        if (settings.accountingGroupId) targetIds.push({ platform: 'telegram', id: settings.accountingGroupId });
         if (settings.botAccountingGroupIdTele) targetIds.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
         if (settings.botAccountingGroupIdBale) targetIds.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
+        if (settings.botAccountingGroupIdWhatsApp) targetIds.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
         if (settings.botAccountingGroupId) targetIds.push({ platform: 'telegram', id: settings.botAccountingGroupId });
         if (settings.reportsGroupId) targetIds.push({ platform: 'telegram', id: settings.reportsGroupId });
         if (settings.telegramReportsGroupId) targetIds.push({ platform: 'telegram', id: settings.telegramReportsGroupId });
+        if (settings.telegramReportsGroupId2) targetIds.push({ platform: 'telegram', id: settings.telegramReportsGroupId2 });
         if (settings.baleReportsGroupId) targetIds.push({ platform: 'bale', id: settings.baleReportsGroupId });
+        if (settings.baleReportsGroupId2) targetIds.push({ platform: 'bale', id: settings.baleReportsGroupId2 });
+        if (settings.whatsappReportsGroupId) targetIds.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId });
+        if (settings.whatsappReportsGroupId2) targetIds.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId2 });
+        if (settings.telegramChatId) targetIds.push({ platform: 'telegram', id: settings.telegramChatId });
+        if (settings.baleChatId) targetIds.push({ platform: 'bale', id: settings.baleChatId });
         
         // Add any subscribed groups from db
         if (db.groups && Array.isArray(db.groups)) {
@@ -3306,6 +3362,15 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         const uniqueTargets = [];
         const seenSet = new Set();
         for (const t of targetIds) {
+            if (t.platform === 'telegram' && !isTelegramConfigured) {
+                console.log(`[Production Report] Skipping Telegram target ${t.id} because Telegram token is not set.`);
+                continue;
+            }
+            if (t.platform === 'bale' && !isBaleConfigured) {
+                console.log(`[Production Report] Skipping Bale target ${t.id} because Bale token is not set.`);
+                continue;
+            }
+
             const cleanId = utils.sanitizeGroupId(t.id);
             if (!cleanId) continue;
             const key = `${t.platform}:${cleanId}`;
@@ -3316,7 +3381,7 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
         }
 
         if (uniqueTargets.length === 0) {
-            return res.status(400).json({ error: 'هیچ شناسه گروه یا چت باتی در تنظیمات سیستم یافت نشد.' });
+            return res.status(400).json({ error: 'هیچ آیدی گروه فعال و توکن ربات تنظیم‌شده‌ای (بله یا تلگرام) برای ارسال گزارش تولید یافت نشد.' });
         }
 
         let sentCount = 0;
@@ -3329,6 +3394,16 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
                 } else if (target.platform === 'bale') {
                     await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
                     sentCount++;
+                } else if (target.platform === 'whatsapp') {
+                    const wa = await safeImport('./backend/whatsapp.js');
+                    if (wa && wa.sendMessage) {
+                        await wa.sendMessage(target.id, caption, {
+                            data: pdfBuffer.toString('base64'),
+                            mimeType: 'application/pdf',
+                            filename: filename
+                        });
+                        sentCount++;
+                    }
                 }
             } catch (err) {
                 lastError = err.message;
@@ -3350,24 +3425,176 @@ app.post('/api/sayan/production-report/send-bot', async (req, res) => {
     }
 });
 
-app.post('/api/sayan/sales-report/send-manual', async (req, res) => {
+app.post("/api/sayan/sales-report/send-manual", async (req, res) => {
     try {
         const db = getDb();
-        const { targetDate } = req.body; // 'today' or 'yesterday'
+        const { targetDate, salesData, dateRangeLabel, applyOfficialTax = true } = req.body; 
         
-        let dateObj = new Date();
-        let label = 'امروز';
-        if (targetDate === 'yesterday') {
-            dateObj.setDate(dateObj.getDate() - 1);
-            label = 'دیروز';
+        const settings = db.settings || {};
+        const isTelegramConfigured = !!(settings.telegramBotToken && typeof settings.telegramBotToken === "string" && settings.telegramBotToken.trim());
+        const isBaleConfigured = !!(settings.baleBotToken && typeof settings.baleBotToken === "string" && settings.baleBotToken.trim());
+        
+        let label = targetDate === "today" ? "امروز" : (targetDate === "yesterday" ? "دیروز" : (dateRangeLabel || targetDate));
+        
+        const salesTargets = [];
+        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: "telegram", id: settings.dailySalesTelegramGroupId });
+        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: "bale", id: settings.dailySalesBaleGroupId });
+        if (settings.dailySalesWhatsappGroupId) salesTargets.push({ platform: "whatsapp", id: settings.dailySalesWhatsappGroupId });
+        if (settings.botAccountingGroupIdTele) salesTargets.push({ platform: "telegram", id: settings.botAccountingGroupIdTele });
+        if (settings.botAccountingGroupIdBale) salesTargets.push({ platform: "bale", id: settings.botAccountingGroupIdBale });
+        if (settings.botAccountingGroupIdWhatsApp) salesTargets.push({ platform: "whatsapp", id: settings.botAccountingGroupIdWhatsApp });
+        if (settings.botAccountingGroupId) salesTargets.push({ platform: "telegram", id: settings.botAccountingGroupId });
+        if (settings.reportsGroupId) salesTargets.push({ platform: "telegram", id: settings.reportsGroupId });
+        if (settings.telegramReportsGroupId) salesTargets.push({ platform: "telegram", id: settings.telegramReportsGroupId });
+        if (settings.telegramReportsGroupId2) salesTargets.push({ platform: "telegram", id: settings.telegramReportsGroupId2 });
+        if (settings.baleReportsGroupId) salesTargets.push({ platform: "bale", id: settings.baleReportsGroupId });
+        if (settings.baleReportsGroupId2) salesTargets.push({ platform: "bale", id: settings.baleReportsGroupId2 });
+        if (settings.telegramChatId) salesTargets.push({ platform: "telegram", id: settings.telegramChatId });
+        if (settings.baleChatId) salesTargets.push({ platform: "bale", id: settings.baleChatId });
+        if (db.groups && Array.isArray(db.groups)) {
+            db.groups.forEach(g => {
+                if (g.chatId) salesTargets.push({ platform: g.platform || "telegram", id: g.chatId });
+            });
+        }
+        
+        const uniqueTargets = [];
+        const seenSet = new Set();
+        for (const t of salesTargets) {
+            if (t.platform === "telegram" && !isTelegramConfigured) continue;
+            if (t.platform === "bale" && !isBaleConfigured) continue;
+            const cleanId = utils.sanitizeGroupId(t.id);
+            if (!cleanId) continue;
+            const key = `${t.platform}:${cleanId}`;
+            if (!seenSet.has(key)) {
+                seenSet.add(key);
+                uniqueTargets.push({ platform: t.platform, id: cleanId });
+            }
+        }
+        
+        if (uniqueTargets.length === 0) {
+            return res.status(400).json({ error: "هیچ آیدی گروه فعال و توکن ربات تنظیم‌شده‌ای (بله یا تلگرام) برای ارسال گزارش فروش یافت نشد." });
+        }
+        
+        if (!salesData || !Array.isArray(salesData)) {
+            return res.status(400).json({ error: "اطلاعات فروش ارسال نشده است." });
         }
 
-        const result = await sendDailySalesReportForDate(db, dateObj, label);
+        const title = `گزارش جامع فروش، مرجوعی و میانگین قیمت - ${label}`;
+        
+        const itemMap = new Map();
+        let summaryStats = {
+            salesQty: 0,
+            salesAmt: 0,
+            returnQty: 0,
+            returnAmt: 0,
+            netQty: 0,
+            netAmt: 0,
+            avgPricePerKg: 0
+        };
+
+        salesData.forEach(row => {
+            const docType = String(row.DocType || row.Field_009 || "").trim();
+            const isReturn = row.IsReturn || ["4", "13", "24"].includes(docType) || (row.Notes || "").includes("مرجوع") || (row.Notes || "").includes("برگشت");
+            
+            const notesStr = String(row.Notes || "") + " " + String(row.ItemNotes || "");
+            const isOfficial = row.IsOfficial || (notesStr.includes("رسمی") && !notesStr.includes("غیر رسمی")) || row.InvoiceNum === "123" || String(row.CustomerName || "").includes("اندیشه خلاق رایکا") || notesStr.includes("ارزش افزوده");
+            
+            const qty = parseFloat(row.Quantity || row.quantity || 0);
+            const rawAmt = parseFloat(row.Amount || row.amount || 0);
+            
+            // 10% official invoice tax increase
+            const effectiveAmt = (isOfficial && applyOfficialTax) ? rawAmt * 1.10 : rawAmt;
+            
+            const groupName = row.GroupName || row.groupName || row.ItemName || row.itemName || "سایر کالاها";
+            const itemName = row.ItemName || row.itemName || "کالا";
+            const key = groupName;
+
+            if (!itemMap.has(key)) {
+                itemMap.set(key, {
+                    groupName,
+                    itemName,
+                    salesQty: 0,
+                    salesAmt: 0,
+                    returnQty: 0,
+                    returnAmt: 0,
+                    netQty: 0,
+                    netAmt: 0,
+                    avgPricePerKg: 0
+                });
+            }
+
+            const item = itemMap.get(key);
+            if (isReturn) {
+                item.returnQty += qty;
+                item.returnAmt += effectiveAmt;
+                summaryStats.returnQty += qty;
+                summaryStats.returnAmt += effectiveAmt;
+            } else {
+                item.salesQty += qty;
+                item.salesAmt += effectiveAmt;
+                summaryStats.salesQty += qty;
+                summaryStats.salesAmt += effectiveAmt;
+            }
+        });
+
+        const items = Array.from(itemMap.values()).map(item => {
+            item.netQty = item.salesQty - item.returnQty;
+            item.netAmt = item.salesAmt - item.returnAmt;
+            item.avgPricePerKg = item.netQty > 0 ? Math.round(item.netAmt / item.netQty) : 0;
+            return item;
+        });
+
+        summaryStats.netQty = summaryStats.salesQty - summaryStats.returnQty;
+        summaryStats.netAmt = summaryStats.salesAmt - summaryStats.returnAmt;
+        summaryStats.avgPricePerKg = summaryStats.netQty > 0 ? Math.round(summaryStats.netAmt / summaryStats.netQty) : 0;
+
+        const pdfBuffer = await Renderer.generateSalesReportPDF(title, label, items, summaryStats);
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        const filename = `Sales_Return_Report_${timestamp}.pdf`;
+        
+        const fmtFa = (num, decimals = 0) => Number(num || 0).toLocaleString("fa-IR", { maximumFractionDigits: decimals });
+        
+        let caption = `📊 **گزارش تحلیلی فروش و مرجوعی سایان ERP**\n`;
+        caption += `📅 **تاریخ / بازه:** ${label}\n\n`;
+        caption += `🟢 **فروش ناخالص:** ${(summaryStats.salesQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.salesQty, 1)} ک‌گ) | **${fmtFa(summaryStats.salesAmt)} ریال**\n`;
+        if (summaryStats.returnQty > 0 || summaryStats.returnAmt > 0) {
+            caption += `🔴 **مرجوعی (برگشت از فروش):** ${(summaryStats.returnQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.returnQty, 1)} ک‌گ) | **${fmtFa(summaryStats.returnAmt)} ریال**\n`;
+        }
+        caption += `⚖️ **فروش خالص:** ${(summaryStats.netQty / 1000).toFixed(2)} تن (${fmtFa(summaryStats.netQty, 1)} ک‌گ) | **${fmtFa(summaryStats.netAmt)} ریال**\n`;
+        caption += `💰 **میانگین قیمت فروش خالص:** **${fmtFa(summaryStats.avgPricePerKg)} ریال / کیلوگرم**\n\n`;
+        caption += `📄 **جدول تفکیکی و خروجی کامل PDF گزارش پیوست گردید.**`;
+
+        let sentCount = 0;
+        let lastError = null;
+        for (const target of uniqueTargets) {
+            try {
+                if (target.platform === "telegram") {
+                    await telegram.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                } else if (target.platform === "bale") {
+                    await bale.sendBotDocument(target.id, pdfBuffer, filename, caption);
+                    sentCount++;
+                }
+            } catch (err) {
+                lastError = err.message;
+                console.error(`[Send Sales Report] Failed for ${target.platform}:${target.id}:`, err.message);
+            }
+        }
+        
+        if (sentCount === 0) {
+            return res.status(400).json({ error: `ارسال گزارش آمار فروش ناموفق بود: ${lastError || "خطای ناشناخته"}` });
+        }
+        
         res.json({
             success: true,
-            message: `گزارش فروش ${label} با موفقیت به پیام‌رسان‌ها ارسال شد.`,
-            result
+            message: `گزارش تحلیلی فروش و مرجوعی با موفقیت به ${sentCount} گروه / چت در بات‌ها ارسال شد.`
         });
+    } catch (e) {
+        console.error("Manual Sales Report Sending Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});;
     } catch (e) {
         console.error("Manual Sales Report Sending Error:", e);
         res.status(500).json({ error: e.message });

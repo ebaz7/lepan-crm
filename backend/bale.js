@@ -12,8 +12,8 @@ const ensureBaleActive = () => {
     if (!botToken) {
         try {
             const token = getDb()?.settings?.baleBotToken;
-            if (token) {
-                initBaleBot(token);
+            if (token && typeof token === 'string' && token.trim()) {
+                initBaleBot(token.trim());
             }
         } catch (e) {
             console.error("Auto init Bale failed:", e.message);
@@ -23,25 +23,39 @@ const ensureBaleActive = () => {
 
 const callApi = (method, data, isMultipart = false) => {
     return new Promise((resolve, reject) => {
-        if (!botToken) return reject("No Token");
+        if (!botToken) return reject(new Error("توکن ربات بله در تنظیمات سیستم ثبت نشده است."));
         const options = {
             hostname: 'tapi.bale.ai',
             path: `/bot${botToken}/${method}`,
             method: 'POST',
             headers: isMultipart ? data.getHeaders() : { 'Content-Type': 'application/json' },
-            timeout: 15000 // 15 seconds timeout
+            timeout: 20000 // 20 seconds timeout
         };
 
         const req = https.request(options, (res) => {
             let body = '';
             res.on('data', c => body += c);
-            res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e){ resolve({}); } });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(body);
+                    if (parsed && parsed.ok === false) {
+                        return reject(new Error(parsed.description || `خطای بله (${parsed.error_code || 'نامشخص'})`));
+                    }
+                    resolve(parsed);
+                } catch(e) {
+                    if (res.statusCode >= 400) {
+                        reject(new Error(`خطای سرور بله (کد ${res.statusCode}): ${body.slice(0, 200)}`));
+                    } else {
+                        resolve({ raw: body });
+                    }
+                }
+            });
         });
 
         req.on('error', (e) => reject(e));
         req.on('timeout', () => {
             req.destroy();
-            reject(new Error("Request timeout"));
+            reject(new Error("مهلت زمانی اتصال به سرور بله (Timeout) به پایان رسید."));
         });
 
         if (isMultipart) data.pipe(req);
@@ -53,14 +67,15 @@ const callApi = (method, data, isMultipart = false) => {
 };
 
 export const initBaleBot = (token) => {
-    if (!token) {
+    const cleanToken = (token && typeof token === 'string') ? token.trim() : null;
+    if (!cleanToken) {
         pollingActive = false;
         botToken = null;
         return;
     }
-    if (botToken === token && pollingActive) return;
+    if (botToken === cleanToken && pollingActive) return;
 
-    botToken = token;
+    botToken = cleanToken;
     
     if (!pollingActive) {
         pollingActive = true;
@@ -198,14 +213,45 @@ export const sendBotPhoto = (chatId, buffer, caption, opts) => {
     return callApi('sendPhoto', form, true);
 };
 
-export const sendBotDocument = (chatId, buffer, name, caption) => {
+export const sendBotDocument = async (chatId, buffer, name, caption) => {
     ensureBaleActive();
+    if (!botToken) {
+        throw new Error("توکن ربات بله در تنظیمات سیستم ثبت نشده است.");
+    }
     const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
-    const form = new FormData();
-    form.append('chat_id', chatId);
-    form.append('document', buffer, { filename: name || 'document.pdf' });
-    form.append('caption', safeCaption || '');
-    return callApi('sendDocument', form, true);
+
+    const doSend = async (parseMode = 'Markdown', attempt = 1) => {
+        try {
+            const form = new FormData();
+            form.append('chat_id', chatId);
+            form.append('document', buffer, { filename: name || 'document.pdf', contentType: 'application/pdf' });
+            form.append('caption', safeCaption || '');
+            if (parseMode) {
+                form.append('parse_mode', parseMode);
+            }
+            const res = await callApi('sendDocument', form, true);
+            if (!res || res.ok === false) {
+                throw new Error(res ? (res.description || "پاسخ ناموفق از بله") : "پاسخ خالی از بله");
+            }
+            return res;
+        } catch (e) {
+            console.error(`[Bale sendBotDocument] (تلاش ${attempt}/3, parseMode: ${parseMode}) خطا برای چت ${chatId}:`, e.message);
+            
+            // If Markdown parsing failed, try without markdown first
+            if (parseMode === 'Markdown') {
+                return doSend(null, attempt);
+            }
+
+            if (attempt < 3) {
+                await new Promise(r => setTimeout(r, 2000 * attempt));
+                return doSend(null, attempt + 1);
+            }
+            throw e;
+        }
+    };
+
+    const hasMarkdown = caption && (caption.includes('*') || caption.includes('_') || caption.includes('`'));
+    return doSend(hasMarkdown ? 'Markdown' : null, 1);
 };
 
 export const deleteBotMessage = (chatId, messageId) => {
