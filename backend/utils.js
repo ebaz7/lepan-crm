@@ -99,10 +99,6 @@ export const sanitizeGroupId = (id) => {
     let str = id.toString().trim();
     if (!str) return '';
 
-    // Convert Persian and Arabic digits to English/ASCII digits
-    str = str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
-             .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-
     // Handle RTL trailing minus "123456-" -> "-123456"
     if (str.endsWith('-')) {
         str = '-' + str.slice(0, -1);

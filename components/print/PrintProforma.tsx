@@ -88,9 +88,9 @@ const PrintProforma: React.FC<PrintProformaProps> = ({ record, settings }) => {
         </div>
       </div>
       
-      {(company?.address || settings?.companyAddress) && (
+      {company?.address && (
         <div className="mt-8 text-[10px] text-center text-gray-400 border-t pt-2">
-          {company?.address || settings?.companyAddress} {(company?.phone || settings?.companyPhone) ? `| تلفن: ${company?.phone || settings?.companyPhone}` : ''}
+          {company.address} | تلفن: {company.phone}
         </div>
       )}
     </div>

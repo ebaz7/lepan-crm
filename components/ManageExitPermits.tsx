@@ -486,11 +486,21 @@ const ManageExitPermits: React.FC<{ currentUser: User, settings?: SystemSettings
             const configOptionStr1 = prevStatus + '->' + nextStatus;
             const fallbackOptionStr = prevStatus; // For older formats
             
-            // Trigger backend bot notification service for precise multi-group delivery
-            try {
-                await apiCall(`/exit-permits/${permit.id}/bot-notify`, 'POST', {});
-            } catch (e) {
-                console.error("Bot Notify Call Error:", e);
+            const g1StatusArray = settings?.exitPermitFirstGroupConfig?.activeStatuses || [];
+            const isG1Active = g1StatusArray.includes(configOptionStr1) || g1StatusArray.includes(fallbackOptionStr);
+            
+            const g2StatusArray = settings?.exitPermitSecondGroupConfig?.activeStatuses || [];
+            const isG2Active = g2StatusArray.includes(configOptionStr1) || g2StatusArray.includes(fallbackOptionStr);
+            
+            if (isG1Active) {
+                if (g1WA) targets.push({ group: g1WA });
+                if (g1Bale) targets.push({ platform: 'bale', id: g1Bale });
+                if (g1Tg) targets.push({ platform: 'telegram', id: g1Tg });
+            }
+            if (isG2Active) {
+                if (g2WA) targets.push({ group: g2WA });
+                if (g2Bale) targets.push({ platform: 'bale', id: g2Bale });
+                if (g2Tg) targets.push({ platform: 'telegram', id: g2Tg });
             }
 
             let captionTitle = '';

@@ -180,8 +180,18 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
             }
         }
 
-        if (bankSet.size > 0) {
-            return Array.from(bankSet);
+        if (settings?.companies) {
+            settings.companies.forEach(c => {
+                if (c.banks && c.banks.length > 0) {
+                    c.banks.forEach(b => {
+                        if (b && b.bankName) {
+                            const label = `${b.bankName}${b.accountNumber ? ` - ${b.accountNumber}` : ''}`;
+                            bankSet.add(label);
+                            bankSet.add(b.bankName);
+                        }
+                    });
+                }
+            });
         }
 
         if (settings?.operatingBankNames) {
@@ -193,10 +203,17 @@ const TradeModule: React.FC<TradeModuleProps> = ({ currentUser }) => {
         if (settings?.companyBank && typeof settings.companyBank === 'string' && settings.companyBank.trim()) {
             bankSet.add(settings.companyBank.trim());
         }
-        fallbacks.forEach(b => bankSet.add(b));
+
+        if (availableBanks && availableBanks.length > 0) {
+            availableBanks.forEach(b => { if (b && typeof b === 'string' && b.trim()) bankSet.add(b.trim()); });
+        }
+
+        if (bankSet.size === 0) {
+            fallbacks.forEach(f => bankSet.add(f));
+        }
 
         return Array.from(bankSet);
-    }, [selectedRecord, settings]);
+    }, [selectedRecord, settings, availableBanks]);
 
     useEffect(() => {
         const hasActiveModal = showNewModal || showEditMetadataModal || !!editingStage || !!selectedTrancheForDeliveries;

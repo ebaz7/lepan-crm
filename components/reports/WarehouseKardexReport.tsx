@@ -57,20 +57,12 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
         if (!selectedCompany || !selectedItem) return [];
 
         const txSource = allTransactions || transactions;
-        const activeItem = items.find(i => i.id === selectedItem);
-
-        const isMatch = (i: any) => {
-            if (i.itemId && i.itemId === selectedItem) return true;
-            if (activeItem && i.itemName && i.itemName.trim() === activeItem.name.trim()) return true;
-            if (activeItem && activeItem.code && i.itemCode && i.itemCode.trim() === activeItem.code.trim()) return true;
-            return false;
-        };
 
         // 1. Filter and sort ALL historical transactions for the selected item and company
         const itemTxs = txSource.filter(tx => {
             if (tx.company !== selectedCompany) return false;
             if (tx.status === 'REJECTED') return false;
-            return Array.isArray(tx.items) && tx.items.some(isMatch);
+            return tx.items.some(i => i.itemId === selectedItem);
         });
 
         // Sort chronologically by date
@@ -79,11 +71,10 @@ const WarehouseKardexReport: React.FC<Props> = ({ items, transactions, allTransa
         // 2. Compute running balance chronologically across ALL transactions
         let currentBalance = 0;
         const txsWithBalance = itemTxs.map(tx => {
-            const matchingItems = (tx.items || []).filter(isMatch);
-            const qty = matchingItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-            const weight = matchingItems.reduce((sum, i) => sum + (Number(i.weight) || 0), 0);
-            const totalCost = matchingItems.reduce((sum, i) => sum + ((Number(i.quantity) || 0) * (Number(i.unitPrice) || 0)), 0);
-            const unitPrice = qty > 0 ? (totalCost / qty) : (matchingItems[0]?.unitPrice || 0);
+            const txItem = tx.items.find(i => i.itemId === selectedItem);
+            const qty = txItem ? txItem.quantity : 0;
+            const weight = txItem ? txItem.weight : 0;
+            const unitPrice = txItem ? txItem.unitPrice : 0;
 
             if (tx.type === 'IN') {
                 currentBalance += qty;

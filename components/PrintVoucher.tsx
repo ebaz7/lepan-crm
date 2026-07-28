@@ -316,13 +316,13 @@ const PrintVoucher: React.FC<PrintVoucherProps> = ({ order, onClose, settings, o
               case 'payment_id': return currentLine.paymentId || '';
               case 'cheque_no': return currentLine.chequeNumber || '';
               case 'company_name': return order.payingCompany;
-              case 'company_id': return company?.nationalId || (settings as any)?.companyNationalId || '';
-              case 'company_reg': return company?.registrationNumber || (settings as any)?.companyRegistrationNumber || '';
-              case 'company_address': return company?.address || settings?.companyAddress || '';
-              case 'company_postal': return company?.postalCode || (settings as any)?.companyPostalCode || '';
-              case 'company_tel': return company?.phone || settings?.companyPhone || '';
-              case 'company_fax': return company?.fax || (settings as any)?.companyFax || '';
-              case 'company_eco_code': return company?.economicCode || (settings as any)?.companyEconomicCode || '';
+              case 'company_id': return company?.nationalId || '';
+              case 'company_reg': return company?.registrationNumber || '';
+              case 'company_address': return company?.address || '';
+              case 'company_postal': return company?.postalCode || '';
+              case 'company_tel': return company?.phone || '';
+              case 'company_fax': return company?.fax || '';
+              case 'company_eco_code': return company?.economicCode || '';
               default: return '';
           }
       };

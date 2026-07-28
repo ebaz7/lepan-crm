@@ -135,23 +135,11 @@ export const sendBotPhoto = async (chatId, buffer, caption, opts) => {
     return bot.sendPhoto(chatId, buffer, { caption: safeCaption, ...opts }, fileOptions);
 };
 
-export const sendBotDocument = async (chatId, buffer, name, caption, opts = {}) => {
+export const sendBotDocument = async (chatId, buffer, name, caption) => {
     await ensureBotActive();
     if (!bot) return Promise.reject(new Error("Bot Telegram not initialized - توکن ربات تلگرام در تنظیمات ثبت نشده است"));
     const safeCaption = caption && caption.length > 1000 ? caption.slice(0, 995) + '...' : caption;
-    
-    // Attempt sending with Markdown parse_mode first if markdown symbols are present
-    const hasMarkdown = caption && (caption.includes('*') || caption.includes('_') || caption.includes('`'));
-    if (hasMarkdown) {
-        try {
-            return await bot.sendDocument(chatId, buffer, { caption: safeCaption, parse_mode: 'Markdown', ...opts }, { filename: name || 'document.pdf', contentType: 'application/pdf' });
-        } catch (err) {
-            console.warn(`[Telegram sendBotDocument] Failed with Markdown parse_mode: ${err.message}. Retrying as plain text.`);
-        }
-    }
-    
-    // Fallback to plain text send
-    return bot.sendDocument(chatId, buffer, { caption: safeCaption, ...opts }, { filename: name || 'document.pdf', contentType: 'application/pdf' });
+    return bot.sendDocument(chatId, buffer, { caption: safeCaption }, { filename: name || 'document.pdf', contentType: 'application/pdf' });
 };
 
 export const deleteBotMessage = async (chatId, messageId) => {
