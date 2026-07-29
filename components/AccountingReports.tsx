@@ -19,6 +19,7 @@ import {
     RefreshCw,
     Save,
     Send,
+    ArrowLeft,
     ChevronDown,
     ChevronUp,
     Archive,
@@ -2710,34 +2711,72 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <span>{isSendingSalesBot ? 'در حال ارسال دیروز...' : 'ارسال دستی فروش دیروز به بات'}</span>
                                 </button>
 
-                                <div className="flex bg-slate-150 p-1 rounded-lg border border-slate-200 select-none">
+                                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-inner">
                                     <button
                                         type="button"
-                                        onClick={() => setSalesViewMode('today')}
-                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${salesViewMode === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        onClick={() => {
+                                            setCompareMode(false);
+                                            setSalesViewMode('today');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${!compareMode && salesViewMode === 'today' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                                     >
-                                        فروش روزانه
+                                        فروش امروز
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setSalesViewMode('range')}
-                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${salesViewMode === 'range' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        onClick={() => {
+                                            setCompareMode(false);
+                                            setSalesViewMode('range');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${!compareMode && salesViewMode === 'range' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
                                     >
                                         فروش طبق بازه
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCompareMode(true);
+                                            setSalesViewMode('range');
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${compareMode ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'}`}
+                                    >
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                        <span>⚡ پایش مقایسه‌ای ۲ بازه (Period A vs B)</span>
+                                    </button>
                                 </div>
-
-                                <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={compareMode}
-                                        onChange={(e) => setCompareMode(e.target.checked)}
-                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span className="text-xs font-bold text-slate-700">فعال‌سازی مقایسه دو بازه</span>
-                                </label>
                             </div>
                         </div>
+
+                        {/* Banner for quick comparative mode activation */}
+                        {!compareMode && (
+                            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-900 text-white p-3.5 rounded-xl shadow-md flex flex-col md:flex-row items-center justify-between gap-3 border border-blue-700/50">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 font-bold shrink-0">
+                                        VS
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-black text-blue-200 flex items-center gap-2">
+                                            <span>ابزار پایش و تحلیل مقایسه‌ای ۲ بازه (Period A vs B)</span>
+                                            <span className="bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded text-[9px]">جدید</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-300 mt-0.5">
+                                            پایش مقایسه‌ای فروش، وزن خالص، مرجوعی کد ۱۳، میانگین فی نهایی اقلام، میانبر همسان سال قبل و چاپ PDF
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCompareMode(true);
+                                        setSalesViewMode('range');
+                                    }}
+                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2 rounded-lg text-xs transition-all shadow-md shrink-0 cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>مشاهده و شروع تحلیل مقایسه‌ای</span>
+                                    <ArrowLeft className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
 
                         {/* Comparison date pickers & Control Panel */}
                         {compareMode && (
