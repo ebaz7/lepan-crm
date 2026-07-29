@@ -439,6 +439,15 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
                 }
             });
         }
+
+        // Fallback: Check registered bot users if no explicit group targets configured
+        if (salesTargets.length === 0 && db.botUsers && Array.isArray(db.botUsers)) {
+            db.botUsers.forEach(u => {
+                if (u.chatId) {
+                    salesTargets.push({ platform: u.platform || 'telegram', id: u.chatId });
+                }
+            });
+        }
     }
 
     const uniqueSalesTargets = [];
@@ -454,7 +463,20 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     }
 
     if (uniqueSalesTargets.length === 0) {
-        throw new Error('شناسه گروه‌های حسابداری یا فروش در تنظیمات ربات ثبت نشده است! لطفاً شناسه گروه تلگرام یا بله (مثلاً -100xxx) را در بخش تنظیمات سیستم -> تب ربات‌ها -> تنظیمات اطلاع‌رسانی مالی و خروج وارد نمایید.');
+        throw new Error('شناسه گروه اطلاع‌رسانی مالی/فروش در تنظیمات ثبت نشده است! جهت ارسال گزارش فروش، لطفاً به بخش «تنظیمات سیستم ⚙️ -> تب ربات‌ها -> تنظیمات اطلاع‌رسانی مالی و خروج» بروید و شناسه چت یا گروه تلگرام/بله (مانند 100123456789- یا آیدی عددی) را وارد نمایید.');
+    }
+
+    // Check if tokens exist for requested platforms
+    const hasTgToken = !!settings.telegramBotToken;
+    const hasBaleToken = !!settings.baleBotToken;
+    const tgTargets = uniqueSalesTargets.filter(t => t.platform === 'telegram');
+    const baleTargets = uniqueSalesTargets.filter(t => t.platform === 'bale');
+
+    if (tgTargets.length > 0 && !hasTgToken && baleTargets.length === 0) {
+        throw new Error('توکن ربات تلگرام در تنظیمات سیستم ثبت نشده است! لطفاً ابتدا توکن ربات تلگرام را در «تنظیمات سیستم -> تب ربات‌ها» وارد نمایید.');
+    }
+    if (baleTargets.length > 0 && !hasBaleToken && tgTargets.length === 0) {
+        throw new Error('توکن ربات بله در تنظیمات سیستم ثبت نشده است! لطفاً ابتدا توکن ربات بله را در «تنظیمات سیستم -> تب ربات‌ها» وارد نمایید.');
     }
 
     // Fetch sales and returns data from Sayan ERP with local fallback

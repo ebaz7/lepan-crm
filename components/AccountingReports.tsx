@@ -23,7 +23,9 @@ import {
     ChevronDown,
     ChevronUp,
     Archive,
-    Trash2
+    Trash2,
+    Sparkles,
+    Award
 } from 'lucide-react';
 import * as jalaali from 'jalaali-js';
 import { 
@@ -40,6 +42,62 @@ import {
 } from 'recharts';
 import { getRolePermissions } from '../services/authService';
 import { UserRole } from '../types';
+
+export function getMainFamily(groupName: string = '', itemName: string = ''): string {
+    const g = (groupName || '').toLowerCase().trim();
+    const i = (itemName || '').toLowerCase().trim();
+    const text = `${g} ${i}`;
+
+    if (text.includes('اسپاندکس کاور') || text.includes('spandex cover') || (text.includes('اسپاندکس') && text.includes('کاور'))) {
+        return 'اسپاندکس (کاور)';
+    }
+    if (text.includes('اسپاندکس پوشش') || text.includes('ساپورت') || (text.includes('اسپاندکس') && (text.includes('پوشش') || text.includes('covering')))) {
+        return 'اسپاندکس پوشش (ساپورت)';
+    }
+    if (text.includes('نخ ۱۸۰') || text.includes('180') || text.includes('اسپان')) {
+        return 'نخ ۱۸۰ پلی استر اسپان';
+    }
+    if (text.includes('نخ ۱۲۰') || text.includes('120')) {
+        return 'نخ ۱۲۰ پلی استر';
+    }
+    if (text.includes('شواتیز') || text.includes('dty') || text.includes('پلی استر شواتیز')) {
+        return 'پلی استر شواتیز';
+    }
+    if (text.includes('poy') || text.includes('پی او وای')) {
+        return 'POY';
+    }
+    if (text.includes('fdy') || text.includes('اف دی وای')) {
+        return 'FDY';
+    }
+    if (text.includes('نایلون') || text.includes('nylon')) {
+        return 'نایلون';
+    }
+    if (text.includes('نخ ملت') || text.includes('ملت') || text.includes('melt')) {
+        return 'نخ ملت';
+    }
+    if (text.includes('لایکرا') || text.includes('lycra')) {
+        return 'لایکرا';
+    }
+    if (text.includes('لاکرا')) {
+        return 'لاکرا';
+    }
+    if (text.includes('چیپس') || text.includes('chips')) {
+        return 'چیپس';
+    }
+    if (text.includes('لاستیک') || text.includes('rubber')) {
+        return 'لاستیک';
+    }
+    if (text.includes('مستربچ') || text.includes('masterbatch')) {
+        return 'مستربچ';
+    }
+    if (text.includes('کش') || text.includes('elastic')) {
+        return 'کش';
+    }
+    if (groupName && groupName.trim()) {
+        return groupName.trim();
+    }
+    return 'سایر گروه‌های کالا';
+}
 
 export default function AccountingReports({ currentUser, settings }: { currentUser?: any, settings?: any }) {
     // Determine Sayan permissions
@@ -97,6 +155,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [compareSalesDataA, setCompareSalesDataA] = useState<any[]>([]);
     const [compareSalesDataB, setCompareSalesDataB] = useState<any[]>([]);
     const [isSendingSalesBot, setIsSendingSalesBot] = useState(false);
+    const [expandedGroupFamilies, setExpandedGroupFamilies] = useState<Set<string>>(new Set());
+    const [salesSubTab, setSalesSubTab] = useState<'families' | 'items' | 'invoices' | 'comparative' | 'charts'>('families');
+    const [salesSearchQuery, setSalesSearchQuery] = useState<string>('');
+    const [selectedFamilyFilter, setSelectedFamilyFilter] = useState<string>('all');
+    const [salesPeriodPreset, setSalesPeriodPreset] = useState<string>('custom');
 
     // --- TAB 4: PRODUCTION STATE ---
     const [prodLiveItems, setProdLiveItems] = useState<any[]>([]);
@@ -1028,14 +1091,14 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         return stats;
     };
 
-    const getTodayInvoices = () => {
+    const getTodayInvoices = (specificDate?: string) => {
         const todayJalali = (() => {
             const today = new Date();
             const iranToday = new Date(today.getTime() + (3.5 * 60 * 60 * 1000));
             const jToday = jalaali.toJalaali(iranToday.getUTCFullYear(), iranToday.getUTCMonth() + 1, iranToday.getUTCDate());
             return `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
         })();
-        const targetDate = dateTo || todayJalali;
+        const targetDate = specificDate || todayJalali;
 
         const normalizeJalali = (str: string) => {
             if (!str) return '';
@@ -2570,12 +2633,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             <div className="block md:hidden divide-y divide-slate-100 bg-white">
                                 {filteredTraz.length === 0 ? (
                                     <div className="text-center py-12 text-slate-400 font-medium">
-                                        {isLoading ? (
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                                                <span>در حال واکشی اطلاعات تراز سایان...</span>
-                                            </div>
-                                        ) : 'هیچ رکوردی یافت نشد'}
+                                        {isLoading ? 'در حال واکشی اطلاعات تراز سایان...' : 'هیچ رکوردی یافت نشد'}
                                     </div>
                                 ) : (
                                     filteredTraz.map((row, idx) => (
@@ -2585,44 +2643,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                                     <span className="text-[10px] text-slate-400 font-medium font-mono">#{idx + 1} | کد: {row.code}</span>
                                                     <h3 className="text-sm font-black text-slate-900 mt-0.5">{row.name}</h3>
                                                 </div>
-                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
-                                                    row.balance > 0 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                }`}>
-                                                    {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
-                                                </span>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-[11px]">
-                                                <div>
-                                                    <div className="text-slate-400 font-medium">گردش بدهکار</div>
-                                                    <div className="font-mono font-bold text-slate-700 mt-0.5">{formatMoney(row.bed)}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-slate-400 font-medium">گردش بستانکار</div>
-                                                    <div className="font-mono font-bold text-slate-700 mt-0.5">{formatMoney(row.bes)}</div>
-                                                </div>
-                                                <div className="text-left">
-                                                    <div className="text-slate-400 font-medium">مانده نهایی</div>
-                                                    <div className={`font-mono font-black mt-0.5 ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                        {formatMoney(row.balance)}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex justify-end pt-1">
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedTafsili(row.code);
-                                                        setModalTafsiliCode(row.code);
-                                                        setModalTafsiliName(row.name);
-                                                        setIsStatementModalOpen(true);
-                                                        fetchStatement(row.code);
-                                                    }}
-                                                    className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg border border-blue-200 text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                                >
-                                                    <FileText className="w-4 h-4" />
-                                                    مشاهده صورتحساب ریز تفصیلی
-                                                </button>
                                             </div>
                                         </div>
                                     ))
@@ -2632,1140 +2652,753 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     </div>
                 )}
 
-                {/* 2. STATEMENT TAB DISABLED */}
-                {false && activeTab === 'statement' && (
-                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
-                        <div className="border-b border-slate-100 pb-4">
-                            <h2 className="text-xl font-bold text-slate-800">ریز صورتحساب و دفاترحساب اشخاص</h2>
-                            <p className="text-xs text-slate-500 mt-1">مشاهده ریز گردش مالی و جزئیات اسناد حسابداری هر تفصیلی</p>
-                        </div>
-
-                        <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-xl">
-                            <div className="flex-1 w-full relative">
-                                <label className="block text-xs font-bold mb-1.5 text-slate-700">انتخاب شخص تفصیلی (ACT_TBL_007)</label>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="جستجوی شخص..." 
-                                        value={tafsiliSearch} 
-                                        onChange={e => setTafsiliSearch(e.target.value)} 
-                                        className="w-1/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
-                                    />
-                                    <select 
-                                        className="w-2/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold"
-                                        value={selectedTafsili}
-                                        onChange={(e) => setSelectedTafsili(e.target.value)}
-                                    >
-                                        <option value="">-- تفصیلی مورد نظر را انتخاب کنید --</option>
-                                        {tafsilis.filter(t => !tafsiliSearch || t.Name?.includes(tafsiliSearch) || t.Code?.includes(tafsiliSearch)).map(t => (
-                                            <option key={t.Code} value={t.Code}>{t.Name} (کد: {t.Code})</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="flex gap-2 w-full md:w-auto">
-                                <button 
-                                    onClick={() => fetchStatement()} 
-                                    disabled={isLoading || !selectedTafsili} 
-                                    className="flex-1 md:flex-none px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
-                                >
-                                    {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                                    نمایش صورتحساب
-                                </button>
-                                <button 
-                                    onClick={handlePrintStatement}
-                                    disabled={statementData.length === 0}
-                                    className="flex-1 md:flex-none px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"
-                                >
-                                    <Printer className="w-3.5 h-3.5 text-slate-500" />
-                                    چاپ / PDF
-                                </button>
-                            </div>
-                        </div>
-
-                        {statementData.length > 0 && (
-                            <div className="flex justify-end mb-2">
-                                <input 
-                                    type="text" 
-                                    placeholder="جستجو در شرح تراکنش..." 
-                                    value={statementSearch} 
-                                    onChange={e => setStatementSearch(e.target.value)} 
-                                    className="w-full md:w-1/3 border border-slate-300 rounded-md py-2 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" 
-                                />
-                            </div>
-                        )}
-
-                        {statementData.length > 0 ? (
-                            <div className="space-y-4">
-                                <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[450px] overflow-y-auto">
-                                    <table className="w-full text-right text-xs">
-                                        <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
-                                            <tr>
-                                                <th className="p-3 font-bold text-slate-700 w-24">تاریخ سند</th>
-                                                <th className="p-3 font-bold text-slate-700 w-24">شماره سند</th>
-                                                <th className="p-3 font-bold text-slate-700 w-40">سرفصل معین</th>
-                                                <th className="p-3 font-bold text-slate-700">شرح آرتیکل</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بدهکار (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-36">بستانکار (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 text-left w-40">مانده حساب (ریال)</th>
-                                                <th className="p-3 font-bold text-slate-700 w-20 text-center">تشخیص</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {filteredStatementData.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                    <td className="p-3 font-mono text-slate-600 font-semibold">{row.SanadNo}</td>
-                                                    <td className="p-3 text-slate-600 font-medium whitespace-nowrap">
-                                                        {row.MoeinGroup && row.MoeinParent && row.MoeinCode ? (
-                                                            <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-[10px] font-extrabold">
-                                                                {row.MoeinGroup}{row.MoeinParent}{row.MoeinCode} - {row.MoeinName || 'سایر'}
-                                                            </span>
-                                                        ) : (
-                                                            '-'
-                                                        )}
-                                                    </td>
-                                                    <td className="p-3 font-medium text-slate-800 leading-relaxed">{row.Description || 'ثبت حسابداری'}</td>
-                                                    <td className="p-3 text-left text-rose-600 font-mono font-medium">{row.bed > 0 ? formatMoney(row.bed) : '-'}</td>
-                                                    <td className="p-3 text-left text-emerald-600 font-mono font-medium">{row.bes > 0 ? formatMoney(row.bes) : '-'}</td>
-                                                    <td className={`p-3 text-left font-extrabold font-mono ${row.balance > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                        {formatMoney(row.balance)}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                                            row.balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
-                                                        }`}>
-                                                            {row.balance > 0 ? 'بدهکار' : 'بستانکار'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            
-                                            {/* Summary Sticky Foot */}
-                                            <tr className="bg-slate-50 font-extrabold sticky bottom-0 border-t-2 border-slate-200 shadow-[0_-2px_6px_rgba(0,0,0,0.03)] z-10">
-                                                <td colSpan={4} className="p-4 text-left font-extrabold text-slate-700">مجموع دوره تراکنش‌ها:</td>
-                                                <td className="p-4 text-left text-rose-700 font-mono text-sm">
-                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bed, 0))}
-                                                </td>
-                                                <td className="p-4 text-left text-emerald-700 font-mono text-sm">
-                                                    {formatMoney(filteredStatementData.reduce((sum, r) => sum + r.bes, 0))}
-                                                </td>
-                                                <td colSpan={2} className={`p-4 text-left font-black font-mono text-sm ${
-                                                    filteredStatementData[filteredStatementData.length - 1]?.balance > 0 ? 'text-rose-700' : 'text-emerald-700'
-                                                }`}>
-                                                    {formatMoney(filteredStatementData[filteredStatementData.length - 1]?.balance || 0)}
-                                                    <span className="text-[10px] font-bold mr-1">
-                                                        ({(filteredStatementData[filteredStatementData.length - 1]?.balance || 0) > 0 ? 'بدهکار' : 'بستانکار'})
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-16 text-slate-400 font-medium border-2 border-dashed border-slate-200 rounded-xl">
-                                {isLoading ? 'در حال دریافت ریز حساب سایان...' : 'شخص را انتخاب کرده و دکمه نمایش صورتحساب را بزنید'}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* 3. SALES & COMPARISONS TAB */}
+                {/* 3. SALES & COMPARISONS TAB (EXECUTIVE ERP DASHBOARD) */}
                 {activeTab === 'sales' && (
-                    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-800">تحلیل پیشرفته فروش سایان</h2>
-                                <p className="text-xs text-slate-500 mt-1">پایش دوره‌ای فروش با ابزار مقایسه‌ای پیشرفته محصول و وزن کالا</p>
+                    <div className="p-3.5 sm:p-6 space-y-5 sm:space-y-6">
+                        {/* Executive Header Bar */}
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between border-b border-slate-200 pb-4 gap-4 bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shrink-0">
+                                    <TrendingUp className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg sm:text-xl font-black">داشبورد تصمیم‌یار مدیریتی فروش (ERP Executive Dashboard)</h2>
+                                        <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">سایان ERP v4</span>
+                                    </div>
+                                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                        پایش فروش خالص، مرجوعی کد ۱۳، فی نهایی اقلام، تفکیک سرفصل‌های اصلی کالا و تحلیل مقایسه‌ای دوره‌ای
+                                    </p>
+                                </div>
                             </div>
                             
                             <div className="flex flex-wrap items-center gap-2">
                                 <button 
-                                    onClick={handlePrintTodaySales}
-                                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
-                                    title="دریافت گزارش تفکیکی فروش امروز با فرمت چاپی رسمی و خروجی PDF"
-                                >
-                                    <Printer className="w-3.5 h-3.5" />
-                                    <span>فرم چاپی فروش روزانه (PDF)</span>
-                                </button>
-                                <button 
-                                    onClick={handlePrintPeriodSales}
-                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
-                                    title="دریافت گزارش جامع فاکتورهای دوره‌ای با فرمت رسمی و خروجی PDF"
-                                >
-                                    <Printer className="w-3.5 h-3.5" />
-                                    <span>فرم چاپی فروش دوره‌ای (PDF)</span>
-                                </button>
-
-                                <button 
                                     onClick={() => handleSendSalesBotReport('today')}
                                     disabled={isSendingSalesBot}
-                                    className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
-                                    title="ارسال دستی آمار و گزارش فروش امروز به کانال‌ها و گروه‌های بله و تلگرام"
+                                    className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
                                 >
                                     <Send className="w-3.5 h-3.5" />
-                                    <span>{isSendingSalesBot ? 'در حال ارسال امروز...' : 'ارسال دستی فروش امروز به بات'}</span>
-                                </button>
-                                <button 
-                                    onClick={() => handleSendSalesBotReport('yesterday')}
-                                    disabled={isSendingSalesBot}
-                                    className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-3.5 rounded-lg text-xs transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
-                                    title="ارسال دستی آمار و گزارش فروش دیروز به کانال‌ها و گروه‌های بله و تلگرام"
-                                >
-                                    <Send className="w-3.5 h-3.5" />
-                                    <span>{isSendingSalesBot ? 'در حال ارسال دیروز...' : 'ارسال دستی فروش دیروز به بات'}</span>
+                                    <span>{isSendingSalesBot ? 'در حال ارسال...' : 'ارسال امروز به ربات (بله/تلگرام)'}</span>
                                 </button>
 
-                                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-inner">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCompareMode(false);
-                                            setSalesViewMode('today');
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${!compareMode && salesViewMode === 'today' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-                                    >
-                                        فروش امروز
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCompareMode(false);
-                                            setSalesViewMode('range');
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${!compareMode && salesViewMode === 'range' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-                                    >
-                                        فروش طبق بازه
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCompareMode(true);
-                                            setSalesViewMode('range');
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${compareMode ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'}`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                        <span>⚡ پایش مقایسه‌ای ۲ بازه (Period A vs B)</span>
-                                    </button>
+                                <button 
+                                    onClick={handlePrintTodaySales}
+                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer shadow-md active:scale-95"
+                                >
+                                    <Printer className="w-3.5 h-3.5" />
+                                    <span>چاپ رسمی (PDF)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Top Sub-Tabs Navigation */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                            <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { setSalesSubTab('families'); setCompareMode(false); }}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${!compareMode && salesSubTab === 'families' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                    <Layers className="w-4 h-4 text-blue-600" />
+                                    <span>گزارش سرفصل‌های اصلی کالا (با Drill Down)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSalesSubTab('items'); setCompareMode(false); }}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${!compareMode && salesSubTab === 'items' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                    <FileText className="w-4 h-4 text-emerald-600" />
+                                    <span>گزارش ریز کالاها</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSalesSubTab('invoices'); setCompareMode(false); }}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${!compareMode && salesSubTab === 'invoices' ? 'bg-white text-blue-700 shadow-sm border border-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                    <Activity className="w-4 h-4 text-purple-600" />
+                                    <span>لیست فاکتورها ({displayedInvoices.length})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSalesSubTab('comparative'); setCompareMode(true); }}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${compareMode ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'}`}
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                    <span>⚡ پایش مقایسه‌ای ۲ بازه (Period A vs B)</span>
+                                </button>
+                            </div>
+
+                            {/* Quick Presets Dropdown */}
+                            <div className="flex items-center gap-2 px-2">
+                                <span className="text-[11px] text-slate-500 font-bold hidden sm:inline">بازه سریع:</span>
+                                <div className="flex gap-1 overflow-x-auto py-1">
+                                    {[
+                                        { id: 'today', label: 'امروز' },
+                                        { id: 'yesterday', label: 'دیروز' },
+                                        { id: 'this_month', label: 'این ماه' },
+                                        { id: 'last_month', label: 'ماه قبل' },
+                                        { id: 'this_quarter', label: 'این فصل' },
+                                        { id: 'this_year', label: 'امسال' },
+                                        { id: 'last_year', label: 'پارسال' }
+                                    ].map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => {
+                                                setSalesPeriodPreset(p.id);
+                                                const today = new Date();
+                                                const jNow = jalaali.toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
+                                                const pad = (n: number) => String(n).padStart(2, '0');
+                                                if (p.id === 'today') {
+                                                    const d = `${jNow.jy}/${pad(jNow.jm)}/${pad(jNow.jd)}`;
+                                                    setDateFrom(d); setDateTo(d); setSalesViewMode('today');
+                                                } else if (p.id === 'yesterday') {
+                                                    const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+                                                    const jYest = jalaali.toJalaali(yest.getFullYear(), yest.getMonth() + 1, yest.getDate());
+                                                    const d = `${jYest.jy}/${pad(jYest.jm)}/${pad(jYest.jd)}`;
+                                                    setDateFrom(d); setDateTo(d); setSalesViewMode('range');
+                                                } else if (p.id === 'this_month') {
+                                                    setDateFrom(`${jNow.jy}/${pad(jNow.jm)}/01`);
+                                                    setDateTo(`${jNow.jy}/${pad(jNow.jm)}/${pad(jalaali.jalaaliMonthLength(jNow.jy, jNow.jm))}`);
+                                                    setSalesViewMode('range');
+                                                } else if (p.id === 'last_month') {
+                                                    let pm = jNow.jm - 1, py = jNow.jy; if (pm < 1) { pm = 12; py--; }
+                                                    setDateFrom(`${py}/${pad(pm)}/01`); setDateTo(`${py}/${pad(pm)}/${pad(jalaali.jalaaliMonthLength(py, pm))}`);
+                                                    setSalesViewMode('range');
+                                                } else if (p.id === 'this_quarter') {
+                                                    const q = Math.ceil(jNow.jm / 3); const sm = (q - 1) * 3 + 1; const em = q * 3;
+                                                    setDateFrom(`${jNow.jy}/${pad(sm)}/01`); setDateTo(`${jNow.jy}/${pad(em)}/${pad(jalaali.jalaaliMonthLength(jNow.jy, em))}`);
+                                                    setSalesViewMode('range');
+                                                } else if (p.id === 'this_year') {
+                                                    setDateFrom(`${jNow.jy}/01/01`); setDateTo(`${jNow.jy}/12/29`); setSalesViewMode('range');
+                                                } else if (p.id === 'last_year') {
+                                                    setDateFrom(`${jNow.jy - 1}/01/01`); setDateTo(`${jNow.jy - 1}/12/29`); setSalesViewMode('range');
+                                                }
+                                            }}
+                                            className={`text-[10px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${salesPeriodPreset === p.id ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Banner for quick comparative mode activation */}
-                        {!compareMode && (
-                            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-900 text-white p-3.5 rounded-xl shadow-md flex flex-col md:flex-row items-center justify-between gap-3 border border-blue-700/50">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 font-bold shrink-0">
-                                        VS
-                                    </div>
-                                    <div>
-                                        <div className="text-xs font-black text-blue-200 flex items-center gap-2">
-                                            <span>ابزار پایش و تحلیل مقایسه‌ای ۲ بازه (Period A vs B)</span>
-                                            <span className="bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded text-[9px]">جدید</span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-300 mt-0.5">
-                                            پایش مقایسه‌ای فروش، وزن خالص، مرجوعی کد ۱۳، میانگین فی نهایی اقلام، میانبر همسان سال قبل و چاپ PDF
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setCompareMode(true);
-                                        setSalesViewMode('range');
-                                    }}
-                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2 rounded-lg text-xs transition-all shadow-md shrink-0 cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>مشاهده و شروع تحلیل مقایسه‌ای</span>
-                                    <ArrowLeft className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Comparison date pickers & Control Panel */}
+                        {/* Comparative Controls Panel */}
                         {compareMode && (
-                            <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 p-4 rounded-xl border border-blue-200 shadow-sm space-y-3 animate-fadeIn">
+                            <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 p-4 rounded-2xl border border-blue-200 shadow-sm space-y-3 animate-fadeIn">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-blue-200/60 pb-3">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-sm">
+                                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black shadow-sm text-xs">
                                             VS
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-extrabold text-blue-950">داشبورد و پنل تخصصی پایش مقایسه‌ای فروش (Period A vs Period B)</h3>
-                                            <p className="text-[11px] text-blue-700 font-medium">مقایسه تراز فروش، مرجوعی کد ۱۳، وزن خالص و میانگین فی نهایی اقلام</p>
+                                            <h3 className="text-sm font-black text-blue-950">پنل تخصصی پایش مقایسه‌ای ۲ بازه (Period A vs Period B)</h3>
+                                            <p className="text-[11px] text-blue-700 font-medium">پایش رشد مبلغ، وزن خالص، مرجوعی کد ۱۳ و فی نهایی اقلام</p>
                                         </div>
                                     </div>
                                     
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <div className="flex bg-white rounded-lg p-1 border border-blue-200 shadow-sm">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCompareGroupBy('group')}
-                                                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${compareGroupBy === 'group' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
-                                            >
-                                                تفکیک: گروه کالا
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setCompareGroupBy('item')}
-                                                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${compareGroupBy === 'item' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
-                                            >
-                                                تفکیک: نام دقیق کالا
-                                            </button>
-                                        </div>
-
+                                    <div className="flex items-center gap-2">
                                         <button
                                             onClick={handlePrintComparativeSales}
                                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                                         >
                                             <Printer className="w-3.5 h-3.5" />
-                                            <span>چاپ رسمی مقایسه‌ای (PDF)</span>
+                                            <span>چاپ مقایسه‌ای رسمی (PDF)</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-white/80 p-3 rounded-lg border border-blue-100 shadow-inner">
-                                        <div className="text-xs font-bold text-blue-800 mb-1 flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
-                                            بازه اول ( Period A ) — بازه اصلی بالای صفحه
-                                        </div>
-                                        <div className="text-xs font-mono font-bold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded border border-slate-200">
+                                    <div className="bg-white/90 p-3 rounded-xl border border-blue-100 shadow-xs">
+                                        <div className="text-xs font-bold text-blue-800 mb-1">بازه اول ( Period A ) — از بالای صفحه</div>
+                                        <div className="text-xs font-mono font-black text-slate-800 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
                                             از {dateFrom || '---'} تا {dateTo || '---'}
                                         </div>
                                     </div>
                                     
-                                    <div className="bg-white/80 p-3 rounded-lg border border-indigo-100 shadow-inner">
-                                        <div className="text-xs font-bold text-indigo-800 mb-1 flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
-                                            بازه دوم مقایسه ( Period B )
-                                        </div>
+                                    <div className="bg-white/90 p-3 rounded-xl border border-indigo-100 shadow-xs">
+                                        <div className="text-xs font-bold text-indigo-800 mb-1">بازه دوم مقایسه ( Period B )</div>
                                         <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-2.5 py-1 w-full shadow-inner">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="۱۴۰۳/۰۱/۰۱"
-                                                    value={salesDateFromB}
-                                                    onChange={(e) => setSalesDateFromB(e.target.value)}
-                                                    className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
-                                                />
-                                            </div>
+                                            <input 
+                                                type="text" 
+                                                placeholder="۱۴۰۳/۰۱/۰۱"
+                                                value={salesDateFromB}
+                                                onChange={(e) => setSalesDateFromB(e.target.value)}
+                                                className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-bold font-mono text-center w-full"
+                                            />
                                             <span className="text-xs text-slate-400 font-bold">تا</span>
-                                            <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-2.5 py-1 w-full shadow-inner">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="۱۴۰۳/۱۲/۲۹"
-                                                    value={salesDateToB}
-                                                    onChange={(e) => setSalesDateToB(e.target.value)}
-                                                    className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
-                                                />
-                                            </div>
+                                            <input 
+                                                type="text" 
+                                                placeholder="۱۴۰۳/۱۲/۲۹"
+                                                value={salesDateToB}
+                                                onChange={(e) => setSalesDateToB(e.target.value)}
+                                                className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-bold font-mono text-center w-full"
+                                            />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-blue-100">
                                     <span className="text-[11px] font-bold text-slate-600">میانبر بازه دوم:</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => applyQuickComparePreset('prev_year')}
-                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
-                                    >
-                                        همسان سال قبل (پارسال)
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => applyQuickComparePreset('prev_month')}
-                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
-                                    >
-                                        ماه قبل
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => applyQuickComparePreset('prev_quarter')}
-                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
-                                    >
-                                        فصل قبل
-                                    </button>
+                                    {['prev_year', 'prev_month', 'prev_quarter'].map(key => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => applyQuickComparePreset(key as 'prev_year' | 'prev_month' | 'prev_quarter')}
+                                            className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
+                                        >
+                                            {key === 'prev_year' ? 'همسان سال قبل' : key === 'prev_month' ? 'ماه قبل' : 'فصل قبل'}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Top-level overviews for Period A */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50/70 rounded-xl p-4 border border-blue-200 shadow-sm col-span-1 sm:col-span-2 md:col-span-1">
-                                <div className="text-blue-800 font-bold text-[11px] flex items-center justify-between">
-                                    <span>فروش خالص بازه</span>
-                                    <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-mono">فی: {formatMoney(Math.round(stats.rangeFinalPrice))}</span>
-                                </div>
-                                <div className="text-lg font-black text-blue-950 mt-1 font-mono">
-                                    {formatMoney(stats.rangeNetAmt)} <span className="text-[10px] font-bold">ریال</span>
-                                </div>
-                                <div className="text-[10px] text-blue-700 font-semibold mt-1">
-                                    وزن خالص: {stats.rangeNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
-                                </div>
-                                {stats.rangeRetAmt > 0 && (
-                                    <div className="text-[9px] text-rose-600 font-medium mt-0.5">
-                                        مرجوعی کد ۱۳: {formatMoney(stats.rangeRetAmt)} ریال ({stats.rangeRetQty.toFixed(1)} ک‌گ)
+                        {/* Executive 10 Key Metrics Cards Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                            {[
+                                { title: 'فروش خالص امروز', amount: stats.todayNetAmt, qty: stats.todayNetQty, fee: stats.todayFinalPrice, bg: 'bg-blue-50/80 border-blue-200 text-blue-950', badge: 'امروز' },
+                                { title: 'فروش خالص ماه جاری', amount: stats.monthNetAmt, qty: stats.monthNetQty, fee: stats.monthFinalPrice, bg: 'bg-emerald-50/80 border-emerald-200 text-emerald-950', badge: 'این ماه' },
+                                { title: 'فروش خالص فصل جاری', amount: stats.quarterNetAmt, qty: stats.quarterNetQty, fee: stats.quarterFinalPrice, bg: 'bg-purple-50/80 border-purple-200 text-purple-950', badge: 'این فصل' },
+                                { title: 'فروش خالص امسال', amount: stats.yearNetAmt, qty: stats.yearNetQty, fee: stats.yearFinalPrice, bg: 'bg-amber-50/80 border-amber-200 text-amber-950', badge: 'سال ۱۴۰۴' },
+                                { title: 'فروش خالص بازه', amount: stats.rangeNetAmt, qty: stats.rangeNetQty, fee: stats.rangeFinalPrice, bg: 'bg-indigo-50/80 border-indigo-200 text-indigo-950', badge: 'بازه اصلی' },
+                                { title: 'وزن خالص بازه', value: `${stats.rangeNetQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })} kg`, desc: `مرجوعی: ${stats.rangeRetQty.toFixed(1)} kg`, bg: 'bg-slate-50 border-slate-200 text-slate-900', badge: 'وزن کل' },
+                                { title: 'تعداد فاکتورها', value: `${new Set(displayedInvoices.map(i => i.InvoiceNum || i.DocId)).size} عدد`, desc: 'فاکتور صادر شده', bg: 'bg-slate-50 border-slate-200 text-slate-900', badge: 'فاکتور' },
+                                { title: 'تعداد مشتریان', value: `${new Set(displayedInvoices.map(i => i.CustomerName || i.Notes)).size} مشتری`, desc: 'طرف حساب فعال', bg: 'bg-slate-50 border-slate-200 text-slate-900', badge: 'مشتری' },
+                                { title: 'میانگین هر فاکتور', value: formatMoney(Math.round(new Set(displayedInvoices.map(i => i.InvoiceNum || i.DocId)).size > 0 ? stats.rangeNetAmt / new Set(displayedInvoices.map(i => i.InvoiceNum || i.DocId)).size : 0)) + ' ریال', desc: 'مبلغ میانگین', bg: 'bg-slate-50 border-slate-200 text-slate-900', badge: 'میانگین' },
+                                { title: 'میانگین وزن هر فاکتور', value: `${(new Set(displayedInvoices.map(i => i.InvoiceNum || i.DocId)).size > 0 ? (stats.rangeNetQty / new Set(displayedInvoices.map(i => i.InvoiceNum || i.DocId)).size).toFixed(1) : 0)} kg`, desc: 'وزن میانگین فاکتور', bg: 'bg-slate-50 border-slate-200 text-slate-900', badge: 'بار متوسط' }
+                            ].map((card, idx) => (
+                                <div key={idx} className={`rounded-2xl p-3.5 border shadow-xs hover:shadow-md transition-all ${card.bg}`}>
+                                    <div className="flex items-center justify-between text-[11px] font-extrabold mb-1 opacity-80">
+                                        <span>{card.title}</span>
+                                        <span className="text-[9px] bg-white/70 px-1.5 py-0.5 rounded-full font-bold">{card.badge}</span>
                                     </div>
-                                )}
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
-                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
-                                    <span>فروش خالص امروز</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.todayFinalPrice))}</span>
+                                    {'amount' in card ? (
+                                        <>
+                                            <div className="text-base font-black font-mono leading-tight">
+                                                {formatMoney(card.amount)} <span className="text-[9px] font-bold">ریال</span>
+                                            </div>
+                                            <div className="text-[10px] font-semibold mt-1 opacity-90">
+                                                وزن: {card.qty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })} kg | فی: {formatMoney(Math.round(card.fee))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="text-base font-black font-mono leading-tight">{card.value}</div>
+                                            <div className="text-[10px] font-semibold mt-1 opacity-75">{card.desc}</div>
+                                        </>
+                                    )}
                                 </div>
-                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
-                                    {formatMoney(stats.todayNetAmt)} <span className="text-[10px] font-bold">ریال</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-medium mt-1">
-                                    وزن خالص: {stats.todayNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
-                                </div>
-                                {stats.todayRetAmt > 0 && (
-                                    <div className="text-[9px] text-rose-600 font-medium mt-0.5">
-                                        مرجوعی کد ۱۳: {formatMoney(stats.todayRetAmt)} ریال
-                                    </div>
-                                )}
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
-                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
-                                    <span>فروش خالص این ماه</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.monthFinalPrice))}</span>
-                                </div>
-                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
-                                    {formatMoney(stats.monthNetAmt)} <span className="text-[10px] font-bold">ریال</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-medium mt-1">
-                                    وزن خالص: {stats.monthNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
-                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
-                                    <span>فروش خالص فصل جاری</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.quarterFinalPrice))}</span>
-                                </div>
-                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
-                                    {formatMoney(stats.quarterNetAmt)} <span className="text-[10px] font-bold">ریال</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-medium mt-1">
-                                    وزن خالص: {stats.quarterNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
-                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
-                                    <span>فروش خالص امسال</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.yearFinalPrice))}</span>
-                                </div>
-                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
-                                    {formatMoney(stats.yearNetAmt)} <span className="text-[10px] font-bold">ریال</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-medium mt-1">
-                                    وزن خالص: {stats.yearNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
-                                </div>
-                            </div>
+                            ))}
                         </div>
 
-                        {/* Product Group Breakdown with Return Code 13 & Final Unit Price Table */}
+                        {/* Group Family Breakdown Data Computation */}
                         {(() => {
-                            const groupMap = new Map<string, {
-                                groupName: string;
-                                itemName: string;
+                            // Compute Family Map and Sub-items map
+                            const familyMap = new Map<string, {
+                                familyName: string;
                                 salesQty: number;
                                 salesAmt: number;
                                 returnQty: number;
                                 returnAmt: number;
+                                subItems: Map<string, {
+                                    itemName: string;
+                                    itemCode: string;
+                                    salesQty: number;
+                                    salesAmt: number;
+                                    returnQty: number;
+                                    returnAmt: number;
+                                }>;
                             }>();
 
                             displayedInvoices.forEach(row => {
-                                const key = `${row.GroupName || 'سایر'}_${row.ItemName || 'کالا'}`;
                                 const qty = parseFloat(row.Quantity || 0);
                                 const amt = parseFloat(row.Amount || 0);
                                 const isReturn = row.OpCode === '13' || row.OpCode === '14';
+                                const family = getMainFamily(row.GroupName, row.ItemName);
+                                const itemName = row.ItemName || 'کالای بدون نام';
+                                const itemCode = row.ItemCode || '';
 
-                                if (!groupMap.has(key)) {
-                                    groupMap.set(key, {
-                                        groupName: row.GroupName || 'سایر گروه‌ها',
-                                        itemName: row.ItemName || 'کالای بدون نام',
+                                if (!familyMap.has(family)) {
+                                    familyMap.set(family, {
+                                        familyName: family,
+                                        salesQty: 0,
+                                        salesAmt: 0,
+                                        returnQty: 0,
+                                        returnAmt: 0,
+                                        subItems: new Map()
+                                    });
+                                }
+
+                                const famData = familyMap.get(family)!;
+                                if (isReturn) {
+                                    famData.returnQty += qty;
+                                    famData.returnAmt += amt;
+                                } else {
+                                    famData.salesQty += qty;
+                                    famData.salesAmt += amt;
+                                }
+
+                                const subKey = `${itemCode}_${itemName}`;
+                                if (!famData.subItems.has(subKey)) {
+                                    famData.subItems.set(subKey, {
+                                        itemName,
+                                        itemCode,
                                         salesQty: 0,
                                         salesAmt: 0,
                                         returnQty: 0,
                                         returnAmt: 0
                                     });
                                 }
-
-                                const itemData = groupMap.get(key)!;
+                                const subData = famData.subItems.get(subKey)!;
                                 if (isReturn) {
-                                    itemData.returnQty += qty;
-                                    itemData.returnAmt += amt;
+                                    subData.returnQty += qty;
+                                    subData.returnAmt += amt;
                                 } else {
-                                    itemData.salesQty += qty;
-                                    itemData.salesAmt += amt;
+                                    subData.salesQty += qty;
+                                    subData.salesAmt += amt;
                                 }
                             });
 
-                            const groupList = Array.from(groupMap.values());
-                            if (groupList.length === 0) return null;
-
-                            let totSalesQty = 0, totSalesAmt = 0, totRetQty = 0, totRetAmt = 0;
-                            groupList.forEach(g => {
-                                totSalesQty += g.salesQty;
-                                totSalesAmt += g.salesAmt;
-                                totRetQty += g.returnQty;
-                                totRetAmt += g.returnAmt;
+                            const familiesList = Array.from(familyMap.values());
+                            let totalNetAmtAll = 0;
+                            let totalNetQtyAll = 0;
+                            familiesList.forEach(f => {
+                                totalNetAmtAll += (f.salesAmt - f.returnAmt);
+                                totalNetQtyAll += (f.salesQty - f.returnQty);
                             });
 
-                            const totNetQty = totSalesQty - totRetQty;
-                            const totNetAmt = totSalesAmt - totRetAmt;
-                            const totFinalPrice = totNetQty > 0 ? (totNetAmt / totNetQty) : 0;
+                            // Top selling, drop, fee insights
+                            const sortedByAmt = [...familiesList].sort((a, b) => (b.salesAmt - b.returnAmt) - (a.salesAmt - a.returnAmt));
+                            const sortedByWeight = [...familiesList].sort((a, b) => (b.salesQty - b.returnQty) - (a.salesQty - a.returnQty));
+                            const sortedByFee = [...familiesList].filter(f => (f.salesQty - f.returnQty) > 50).sort((a, b) => {
+                                const feeA = (a.salesAmt - a.returnAmt) / (a.salesQty - a.returnQty);
+                                const feeB = (b.salesAmt - b.returnAmt) / (b.salesQty - b.returnQty);
+                                return feeB - feeA;
+                            });
+                            const sortedByReturns = [...familiesList].sort((a, b) => b.returnAmt - a.returnAmt);
+
+                            const topAmtFam = sortedByAmt[0];
+                            const topWeightFam = sortedByWeight[0];
+                            const topFeeFam = sortedByFee[0];
+                            const topRetFam = sortedByReturns[0];
 
                             return (
-                                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-2">
-                                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-sm">جدول خلاصه عملکرد: گروه کالا، مرجوعی (کد ۱۳) و فی نهایی</span>
-                                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium">پایگاه داده سایان ERP</span>
+                                <div className="space-y-6">
+                                    {/* Executive Smart Insights Panel */}
+                                    <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white p-4 sm:p-5 rounded-2xl shadow-lg border border-blue-800/40">
+                                        <div className="flex items-center gap-2 mb-3 border-b border-blue-800/60 pb-2.5">
+                                            <Sparkles className="w-5 h-5 text-amber-400" />
+                                            <h3 className="text-sm font-black text-amber-300">خلاصه مدیریتی و تحلیلی هوشمند کارخانه (Executive Insights)</h3>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10">
+                                                <div className="text-[10px] text-blue-300 font-bold flex items-center justify-between">
+                                                    <span>🏆 پرفروش‌ترین سرفصل (مبلغ)</span>
+                                                    <Award className="w-3.5 h-3.5 text-amber-400" />
+                                                </div>
+                                                <div className="font-black text-white text-sm mt-1">{topAmtFam ? topAmtFam.familyName : '---'}</div>
+                                                <div className="text-[10px] text-slate-300 font-mono mt-0.5">
+                                                    خالص: {topAmtFam ? formatMoney(topAmtFam.salesAmt - topAmtFam.returnAmt) : 0} ریال
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10">
+                                                <div className="text-[10px] text-emerald-300 font-bold flex items-center justify-between">
+                                                    <span>🏅 بیشترین حجم تولید/فروش (وزن)</span>
+                                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                                                </div>
+                                                <div className="font-black text-white text-sm mt-1">{topWeightFam ? topWeightFam.familyName : '---'}</div>
+                                                <div className="text-[10px] text-slate-300 font-mono mt-0.5">
+                                                    وزن خالص: {topWeightFam ? (topWeightFam.salesQty - topWeightFam.returnQty).toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : 0} kg
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10">
+                                                <div className="text-[10px] text-purple-300 font-bold flex items-center justify-between">
+                                                    <span>💰 بالاترین فی خالص فروش</span>
+                                                    <Coins className="w-3.5 h-3.5 text-purple-400" />
+                                                </div>
+                                                <div className="font-black text-white text-sm mt-1">{topFeeFam ? topFeeFam.familyName : '---'}</div>
+                                                <div className="text-[10px] text-slate-300 font-mono mt-0.5">
+                                                    فی متوسط: {topFeeFam && (topFeeFam.salesQty - topFeeFam.returnQty) > 0 ? formatMoney(Math.round((topFeeFam.salesAmt - topFeeFam.returnAmt) / (topFeeFam.salesQty - topFeeFam.returnQty))) : 0} ریال/kg
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/10">
+                                                <div className="text-[10px] text-rose-300 font-bold flex items-center justify-between">
+                                                    <span>🔻 بیشترین مرجوعی کد ۱۳</span>
+                                                    <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+                                                </div>
+                                                <div className="font-black text-white text-sm mt-1">{topRetFam && topRetFam.returnAmt > 0 ? topRetFam.familyName : 'فاقد مرجوعی'}</div>
+                                                <div className="text-[10px] text-slate-300 font-mono mt-0.5">
+                                                    مبلغ مرجوعی: {topRetFam ? formatMoney(topRetFam.returnAmt) : 0} ریال ({topRetFam ? topRetFam.returnQty.toFixed(1) : 0} kg)
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-right text-xs">
-                                            <thead>
-                                                <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
-                                                    <th className="p-3 w-12 text-center">ردیف</th>
-                                                    <th className="p-3">گروه / نام کالا</th>
-                                                    <th className="p-3 text-center">فروش ناخالص (ک‌گ)</th>
-                                                    <th className="p-3 text-left">فروش ناخالص (ریال)</th>
-                                                    <th className="p-3 text-center text-rose-700 bg-rose-50/60">مرجوعی کد ۱۳ (ک‌گ)</th>
-                                                    <th className="p-3 text-left text-rose-700 bg-rose-50/60">مبلغ مرجوعی (ریال)</th>
-                                                    <th className="p-3 text-center font-black text-blue-900 bg-blue-50/60">وزن خالص (ک‌گ)</th>
-                                                    <th className="p-3 text-left font-black text-blue-900 bg-blue-50/60">فروش خالص (ریال)</th>
-                                                    <th className="p-3 text-left font-black text-emerald-900 bg-emerald-50/60">فی نهایی (ریال / ک‌گ)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {groupList.map((g, idx) => {
-                                                    const netQty = g.salesQty - g.returnQty;
-                                                    const netAmt = g.salesAmt - g.returnAmt;
-                                                    const finalPrice = netQty > 0 ? (netAmt / netQty) : 0;
 
-                                                    return (
-                                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                            <td className="p-3 font-semibold text-slate-800">
-                                                                <div className="text-[10px] text-slate-500 font-normal">{g.groupName}</div>
-                                                                <div className="font-bold text-slate-900">{g.itemName}</div>
-                                                            </td>
-                                                            <td className="p-3 text-center font-mono">{g.salesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                            <td className="p-3 text-left font-mono">{formatMoney(g.salesAmt)}</td>
-                                                            <td className="p-3 text-center font-mono text-rose-600 bg-rose-50/30">{g.returnQty > 0 ? g.returnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '-'}</td>
-                                                            <td className="p-3 text-left font-mono text-rose-600 bg-rose-50/30">{g.returnAmt > 0 ? formatMoney(g.returnAmt) : '-'}</td>
-                                                            <td className="p-3 text-center font-mono font-bold text-blue-900 bg-blue-50/30">{netQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                            <td className="p-3 text-left font-mono font-bold text-blue-900 bg-blue-50/30">{formatMoney(netAmt)}</td>
-                                                            <td className="p-3 text-left font-mono font-black text-emerald-800 bg-emerald-50/30">{formatMoney(Math.round(finalPrice))}</td>
+                                    {/* Main Tab View Switcher */}
+                                    {salesSubTab === 'families' && !compareMode && (
+                                        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                            <div className="px-5 py-4 border-b border-slate-200 bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                <div>
+                                                    <h3 className="font-black text-base flex items-center gap-2">
+                                                        <span>گزارش رسمی سرفصل‌های اصلی کالا (با قابلیت Drill Down و توسعه ریز اقلام)</span>
+                                                    </h3>
+                                                    <p className="text-xs text-slate-300 mt-0.5">
+                                                        اسپاندکس (کاور)، کش، پوشش، شواتیز، نایلون، نخ ملت، لایکرا، FDY، چیپس، POY، نخ ۱۲۰، لاستیک، نخ ۱۸۰، مستربچ
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        const printWindow = window.open('', '_blank');
+                                                        if (!printWindow) return;
+                                                        let html = `
+                                                            <html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>گزارش سرفصل‌های اصلی کالا</title>
+                                                            <style>body{font-family:Tahoma,sans-serif;padding:25px;direction:rtl;font-size:11px}
+                                                            table{width:100%;border-collapse:collapse;margin-top:15px}
+                                                            th,td{border:1px solid #cbd5e1;padding:8px;text-align:center}
+                                                            th{background:#0f172a;color:white;font-bold:true}
+                                                            .net{color:#15803d;font-weight:bold} .ret{color:#e11d48}
+                                                            </style></head><body>
+                                                            <h2>گزارش جامع سرفصل‌های اصلی فروش (سایان ERP)</h2>
+                                                            <p>تاریخ: ${dateFrom} تا ${dateTo}</p>
+                                                            <table><thead><tr>
+                                                            <th>ردیف</th><th>نام سرفصل کالا</th><th>وزن فروش (kg)</th><th>وزن مرجوعی</th><th>وزن خالص</th><th>مبلغ فروش</th><th>مبلغ مرجوعی</th><th>فروش خالص (ریال)</th><th>فی خالص (ریال)</th><th>سهم %</th>
+                                                            </tr></thead><tbody>`;
+                                                        familiesList.forEach((fam, idx) => {
+                                                            const nAmt = fam.salesAmt - fam.returnAmt;
+                                                            const nQty = fam.salesQty - fam.returnQty;
+                                                            const fee = nQty > 0 ? (nAmt / nQty) : 0;
+                                                            const share = totalNetAmtAll > 0 ? (nAmt / totalNetAmtAll) * 100 : 0;
+                                                            html += `<tr>
+                                                                <td>${idx + 1}</td>
+                                                                <td style="font-weight:bold;text-align:right">${fam.familyName}</td>
+                                                                <td>${fam.salesQty.toFixed(1)}</td>
+                                                                <td class="ret">${fam.returnQty.toFixed(1)}</td>
+                                                                <td className="net">${nQty.toFixed(1)}</td>
+                                                                <td>${fam.salesAmt.toLocaleString('fa-IR')}</td>
+                                                                <td class="ret">${fam.returnAmt.toLocaleString('fa-IR')}</td>
+                                                                <td className="net">${nAmt.toLocaleString('fa-IR')}</td>
+                                                                <td style="font-weight:bold">${Math.round(fee).toLocaleString('fa-IR')}</td>
+                                                                <td>${share.toFixed(1)}%</td>
+                                                            </tr>`;
+                                                        });
+                                                        html += `</tbody></table></body></html>`;
+                                                        printWindow.document.write(html);
+                                                        printWindow.document.close();
+                                                        printWindow.focus();
+                                                        setTimeout(() => printWindow.print(), 400);
+                                                    }}
+                                                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                                                >
+                                                    <Printer className="w-3.5 h-3.5" />
+                                                    <span>چاپ سرفصل‌های اصلی (PDF)</span>
+                                                </button>
+                                            </div>
+
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-right text-xs">
+                                                    <thead>
+                                                        <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                                                            <th className="p-3 w-10 text-center">#</th>
+                                                            <th className="p-3">نام گروه / سرفصل اصلی کالا</th>
+                                                            <th className="p-3 text-center">وزن فروش (kg)</th>
+                                                            <th className="p-3 text-center text-rose-700 bg-rose-50/50">وزن مرجوعی (kg)</th>
+                                                            <th className="p-3 text-center font-black text-blue-900 bg-blue-50/50">وزن خالص (kg)</th>
+                                                            <th className="p-3 text-left">مبلغ فروش ناخالص (ریال)</th>
+                                                            <th className="p-3 text-left text-rose-700 bg-rose-50/50">مبلغ مرجوعی کد ۱۳ (ریال)</th>
+                                                            <th className="p-3 text-left font-black text-blue-900 bg-blue-50/50">فروش خالص نهایی (ریال)</th>
+                                                            <th className="p-3 text-left font-black text-emerald-900 bg-emerald-50/50">فی خالص نهایی (ریال/kg)</th>
+                                                            <th className="p-3 text-center">سهم (%)</th>
+                                                            <th className="p-3 text-center w-24">Drill Down</th>
                                                         </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
-                                                    <td colSpan={2} className="p-3 text-right">جمع کل عملکرد:</td>
-                                                    <td className="p-3 text-center font-mono">{totSalesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                    <td className="p-3 text-left font-mono">{formatMoney(totSalesAmt)}</td>
-                                                    <td className="p-3 text-center font-mono text-rose-300">{totRetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                    <td className="p-3 text-left font-mono text-rose-300">{formatMoney(totRetAmt)}</td>
-                                                    <td className="p-3 text-center font-mono font-black text-blue-300">{totNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                    <td className="p-3 text-left font-mono font-black text-blue-300">{formatMoney(totNetAmt)}</td>
-                                                    <td className="p-3 text-left font-mono font-black text-emerald-400">{formatMoney(Math.round(totFinalPrice))}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {familiesList.map((fam, idx) => {
+                                                            const netQty = fam.salesQty - fam.returnQty;
+                                                            const netAmt = fam.salesAmt - fam.returnAmt;
+                                                            const finalFee = netQty > 0 ? (netAmt / netQty) : 0;
+                                                            const sharePct = totalNetAmtAll > 0 ? (netAmt / totalNetAmtAll) * 100 : 0;
+                                                            const isExpanded = expandedGroupFamilies.has(fam.familyName);
+                                                            const subItemsList = Array.from(fam.subItems.values());
+
+                                                            return (
+                                                                <React.Fragment key={idx}>
+                                                                    <tr 
+                                                                        onClick={() => {
+                                                                            setExpandedGroupFamilies(prev => {
+                                                                                const n = new Set(prev);
+                                                                                if (n.has(fam.familyName)) n.delete(fam.familyName); else n.add(fam.familyName);
+                                                                                return n;
+                                                                            });
+                                                                        }}
+                                                                        className="hover:bg-slate-50 transition-colors cursor-pointer font-medium"
+                                                                    >
+                                                                        <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                                        <td className="p-3 font-extrabold text-slate-900 flex items-center gap-2">
+                                                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                                                            <span>{fam.familyName}</span>
+                                                                            <span className="text-[10px] text-slate-400 font-normal">({subItemsList.length} کالا)</span>
+                                                                        </td>
+                                                                        <td className="p-3 text-center font-mono">{fam.salesQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                                        <td className="p-3 text-center font-mono text-rose-600 bg-rose-50/30">{fam.returnQty > 0 ? fam.returnQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '-'}</td>
+                                                                        <td className="p-3 text-center font-mono font-bold text-blue-950 bg-blue-50/30">{netQty.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                                        <td className="p-3 text-left font-mono">{formatMoney(fam.salesAmt)}</td>
+                                                                        <td className="p-3 text-left font-mono text-rose-600 bg-rose-50/30">{fam.returnAmt > 0 ? formatMoney(fam.returnAmt) : '-'}</td>
+                                                                        <td className="p-3 text-left font-mono font-black text-blue-950 bg-blue-50/30">{formatMoney(netAmt)}</td>
+                                                                        <td className="p-3 text-left font-mono font-black text-emerald-800 bg-emerald-50/30">{formatMoney(Math.round(finalFee))}</td>
+                                                                        <td className="p-3 text-center font-mono font-bold">
+                                                                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px]">
+                                                                                {sharePct.toFixed(1)}%
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="p-3 text-center">
+                                                                            <button className="inline-flex items-center gap-1 text-[11px] text-blue-700 font-black hover:underline focus:outline-none">
+                                                                                <span>{isExpanded ? 'بستن' : 'ریز کالا'}</span>
+                                                                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+
+                                                                    {/* Nested Expanded Sub-Items Drill-Down Table */}
+                                                                    {isExpanded && (
+                                                                        <tr className="bg-blue-50/30">
+                                                                            <td colSpan={11} className="p-3 sm:p-4 border-y border-blue-200">
+                                                                                <div className="bg-white rounded-xl border border-blue-200 p-3.5 shadow-inner space-y-2">
+                                                                                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                                                                        <h4 className="text-xs font-black text-blue-950 flex items-center gap-1.5">
+                                                                                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                                                                                            <span>ریز اقلام و کالاهای زیرمجموعه سرفصل «{fam.familyName}»</span>
+                                                                                        </h4>
+                                                                                        <span className="text-[10px] text-slate-500 font-mono font-bold">مجموع فروش خالص گروه: {formatMoney(netAmt)} ریال</span>
+                                                                                    </div>
+
+                                                                                    <table className="w-full text-right text-[11px]">
+                                                                                        <thead>
+                                                                                            <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                                                                                                <th className="p-2 w-8 text-center">#</th>
+                                                                                                <th className="p-2">کد کالا</th>
+                                                                                                <th className="p-2">نام دقیق کالا</th>
+                                                                                                <th className="p-2 text-center">وزن فروش</th>
+                                                                                                <th className="p-2 text-center text-rose-700">وزن مرجوعی</th>
+                                                                                                <th className="p-2 text-center font-bold text-blue-900">وزن خالص</th>
+                                                                                                <th className="p-2 text-left">مبلغ فروش</th>
+                                                                                                <th className="p-2 text-left text-rose-700">مبلغ مرجوعی</th>
+                                                                                                <th className="p-2 text-left font-bold text-blue-900">مبلغ خالص</th>
+                                                                                                <th className="p-2 text-left font-bold text-emerald-800">فی خالص</th>
+                                                                                                <th className="p-2 text-center">سهم از گروه (%)</th>
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody className="divide-y divide-slate-100">
+                                                                                            {subItemsList.map((sub, sIdx) => {
+                                                                                                const sNetQty = sub.salesQty - sub.returnQty;
+                                                                                                const sNetAmt = sub.salesAmt - sub.returnAmt;
+                                                                                                const sFee = sNetQty > 0 ? (sNetAmt / sNetQty) : 0;
+                                                                                                const sShareGroup = netAmt > 0 ? (sNetAmt / netAmt) * 100 : 0;
+
+                                                                                                return (
+                                                                                                    <tr key={sIdx} className="hover:bg-slate-50/70">
+                                                                                                        <td className="p-2 text-center text-slate-400 font-mono">{sIdx + 1}</td>
+                                                                                                        <td className="p-2 font-mono text-slate-500">{sub.itemCode || '-'}</td>
+                                                                                                        <td className="p-2 font-bold text-slate-800">{sub.itemName}</td>
+                                                                                                        <td className="p-2 text-center font-mono">{sub.salesQty.toFixed(1)}</td>
+                                                                                                        <td className="p-2 text-center font-mono text-rose-600">{sub.returnQty > 0 ? sub.returnQty.toFixed(1) : '-'}</td>
+                                                                                                        <td className="p-2 text-center font-mono font-bold text-blue-900">{sNetQty.toFixed(1)}</td>
+                                                                                                        <td className="p-2 text-left font-mono">{formatMoney(sub.salesAmt)}</td>
+                                                                                                        <td className="p-2 text-left font-mono text-rose-600">{sub.returnAmt > 0 ? formatMoney(sub.returnAmt) : '-'}</td>
+                                                                                                        <td className="p-2 text-left font-mono font-bold text-blue-900">{formatMoney(sNetAmt)}</td>
+                                                                                                        <td className="p-2 text-left font-mono font-bold text-emerald-800">{formatMoney(Math.round(sFee))}</td>
+                                                                                                        <td className="p-2 text-center font-mono font-semibold text-slate-600">{sShareGroup.toFixed(1)}%</td>
+                                                                                                    </tr>
+                                                                                                );
+                                                                                            })}
+                                                                                        </tbody>
+                                                                                    </table>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
+                                                            <td colSpan={2} className="p-3 text-right">جمع کل سرفصل‌های اصلی:</td>
+                                                            <td className="p-3 text-center font-mono">{familiesList.reduce((s, f) => s + f.salesQty, 0).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-center font-mono text-rose-300">{familiesList.reduce((s, f) => s + f.returnQty, 0).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-center font-mono font-black text-blue-300">{totalNetQtyAll.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono">{formatMoney(familiesList.reduce((s, f) => s + f.salesAmt, 0))}</td>
+                                                            <td className="p-3 text-left font-mono text-rose-300">{formatMoney(familiesList.reduce((s, f) => s + f.returnAmt, 0))}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-blue-300">{formatMoney(totalNetAmtAll)}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-emerald-400">{formatMoney(Math.round(totalNetQtyAll > 0 ? totalNetAmtAll / totalNetQtyAll : 0))}</td>
+                                                            <td colSpan={2} className="p-3 text-center font-mono">100.0%</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Sub-Tab: Items Detail Report */}
+                                    {salesSubTab === 'items' && !compareMode && (
+                                        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+                                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                                <h3 className="text-sm font-black text-slate-800">گزارش تفکیکی کلیه کالاها و محصولات</h3>
+                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                    <div className="relative w-full sm:w-64">
+                                                        <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="جستجو نام یا کد کالا..."
+                                                            value={salesSearchQuery}
+                                                            onChange={(e) => setSalesSearchQuery(e.target.value)}
+                                                            className="text-xs bg-slate-50 border border-slate-200 rounded-xl pr-9 pl-3 py-2 outline-none w-full focus:bg-white focus:border-blue-500 font-medium"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                                                <table className="w-full text-right text-xs">
+                                                    <thead className="bg-slate-100 sticky top-0 border-b border-slate-200 font-bold z-10">
+                                                        <tr>
+                                                            <th className="p-3 w-10 text-center">#</th>
+                                                            <th className="p-3">کد کالا</th>
+                                                            <th className="p-3">نام محصول</th>
+                                                            <th className="p-3">سرفصل اصلی</th>
+                                                            <th className="p-3 text-center">وزن خالص (kg)</th>
+                                                            <th className="p-3 text-left">فروش خالص (ریال)</th>
+                                                            <th className="p-3 text-left">فی خالص (ریال/kg)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {(() => {
+                                                            const allItemsList: any[] = [];
+                                                            familiesList.forEach(fam => {
+                                                                fam.subItems.forEach(sub => {
+                                                                    const netQ = sub.salesQty - sub.returnQty;
+                                                                    const netA = sub.salesAmt - sub.returnAmt;
+                                                                    if (salesSearchQuery.trim()) {
+                                                                        const q = salesSearchQuery.toLowerCase();
+                                                                        if (!sub.itemName.toLowerCase().includes(q) && !sub.itemCode.toLowerCase().includes(q)) return;
+                                                                    }
+                                                                    allItemsList.push({ ...sub, family: fam.familyName, netQ, netA, fee: netQ > 0 ? netA / netQ : 0 });
+                                                                });
+                                                            });
+
+                                                            allItemsList.sort((a, b) => b.netA - a.netA);
+
+                                                            return allItemsList.map((item, idx) => (
+                                                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                                    <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                                    <td className="p-3 font-mono text-slate-500">{item.itemCode || '-'}</td>
+                                                                    <td className="p-3 font-bold text-slate-800">{item.itemName}</td>
+                                                                    <td className="p-3 text-slate-600 font-medium">{item.family}</td>
+                                                                    <td className="p-3 text-center font-mono font-bold text-blue-900">{item.netQ.toFixed(1)}</td>
+                                                                    <td className="p-3 text-left font-mono font-bold text-blue-900">{formatMoney(item.netA)}</td>
+                                                                    <td className="p-3 text-left font-mono font-black text-emerald-800">{formatMoney(Math.round(item.fee))}</td>
+                                                                </tr>
+                                                            ));
+                                                        })()}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Sub-Tab: Invoices List */}
+                                    {salesSubTab === 'invoices' && !compareMode && (
+                                        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                                <h3 className="text-sm font-bold text-slate-800">
+                                                    لیست فاکتورهای فروش صادر شده ({displayedInvoices.length} آرتیکل)
+                                                </h3>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-right text-xs">
+                                                    <thead>
+                                                        <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                                            <th className="p-3 font-semibold w-12 text-center">ردیف</th>
+                                                            <th className="p-3 font-semibold">شماره فاکتور</th>
+                                                            <th className="p-3 font-semibold">نام مشتری</th>
+                                                            <th className="p-3 font-semibold text-center">تعداد اقلام</th>
+                                                            <th className="p-3 font-semibold text-center">مجموع وزن/مقدار</th>
+                                                            <th className="p-3 font-semibold text-left">مبلغ کل (ریال)</th>
+                                                            <th className="p-3 font-semibold text-center w-24">جزئیات</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {(() => {
+                                                            const invoicesMap = new Map<string, {
+                                                                invoiceNum: string;
+                                                                customerName: string;
+                                                                totalAmount: number;
+                                                                totalQuantity: number;
+                                                                items: any[];
+                                                            }>();
+                                                            
+                                                            displayedInvoices.forEach(row => {
+                                                                const key = row.InvoiceNum || row.DocId;
+                                                                if (!key) return;
+                                                                const itemAmt = parseFloat(row.Amount || 0);
+                                                                const itemQty = parseFloat(row.Quantity || 0);
+                                                                const customerName = row.CustomerName || row.Notes || 'نامعلوم';
+                                                                
+                                                                if (!invoicesMap.has(key)) {
+                                                                    invoicesMap.set(key, {
+                                                                        invoiceNum: key,
+                                                                        customerName: customerName,
+                                                                        totalAmount: 0,
+                                                                        totalQuantity: 0,
+                                                                        items: []
+                                                                    });
+                                                                }
+                                                                const existing = invoicesMap.get(key)!;
+                                                                existing.totalAmount += itemAmt;
+                                                                existing.totalQuantity += itemQty;
+                                                                existing.items.push(row);
+                                                            });
+                                                            
+                                                            const list = Array.from(invoicesMap.values());
+                                                            if (list.length === 0) {
+                                                                return <tr><td colSpan={7} className="p-8 text-center text-slate-400">هیچ فاکتوری یافت نشد</td></tr>;
+                                                            }
+                                                            
+                                                            return list.map((inv, idx) => {
+                                                                const isExpanded = expandedInvoiceId === inv.invoiceNum;
+                                                                return (
+                                                                    <React.Fragment key={inv.invoiceNum}>
+                                                                        <tr onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                                            <td className="p-3 font-mono font-bold text-blue-600">{inv.invoiceNum}</td>
+                                                                            <td className="p-3 font-bold text-slate-800">{inv.customerName}</td>
+                                                                            <td className="p-3 text-center font-mono text-slate-500">{inv.items.length} کالا</td>
+                                                                            <td className="p-3 text-center font-mono font-bold text-slate-600">{inv.totalQuantity.toFixed(1)}</td>
+                                                                            <td className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(inv.totalAmount)}</td>
+                                                                            <td className="p-3 text-center">
+                                                                                <button className="text-xs text-blue-600 font-bold">
+                                                                                    {isExpanded ? 'بستن' : 'مشاهده'}
+                                                                                </button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    </React.Fragment>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })()}
-
-                        {/* Today's Invoices Table */}
-                        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">
-                            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                                <h3 className="text-sm font-bold text-slate-800">
-                                    {salesViewMode === 'range' ? 'لیست فاکتورهای فروش طبق بازه' : 'لیست فاکتورهای فروش روز'} ({
-                                        (() => {
-                                            const invoicesMap = new Map<string, any>();
-                                            displayedInvoices.forEach(row => {
-                                                const key = row.InvoiceNum || row.DocId;
-                                                if (key) invoicesMap.set(key, true);
-                                            });
-                                            return invoicesMap.size;
-                                        })()
-                                    } فاکتور)
-                                </h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-right text-xs">
-                                    <thead>
-                                        <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                                            <th className="p-3 font-semibold w-12 text-center">ردیف</th>
-                                            <th className="p-3 font-semibold">شماره فاکتور</th>
-                                            <th className="p-3 font-semibold">نام مشتری</th>
-                                            <th className="p-3 font-semibold text-center">تعداد اقلام</th>
-                                            <th className="p-3 font-semibold text-center">مجموع وزن/مقدار</th>
-                                            <th className="p-3 font-semibold text-left">مبلغ کل (ریال)</th>
-                                            <th className="p-3 font-semibold text-center w-24">جزئیات</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {(() => {
-                                            const invoicesMap = new Map<string, {
-                                                docId: string;
-                                                invoiceNum: string;
-                                                date: string;
-                                                customerName: string;
-                                                notes: string;
-                                                totalAmount: number;
-                                                totalQuantity: number;
-                                                items: {
-                                                    itemName: string;
-                                                    itemCode: string;
-                                                    groupName: string;
-                                                    quantity: number;
-                                                    amount: number;
-                                                    itemNotes: string;
-                                                }[];
-                                            }>();
-                                            
-                                            displayedInvoices.forEach(row => {
-                                                const key = row.InvoiceNum || row.DocId;
-                                                if (!key) return;
-                                                
-                                                const itemAmt = parseFloat(row.Amount || 0);
-                                                const itemQty = parseFloat(row.Quantity || 0);
-                                                const customerName = row.CustomerName || (() => {
-                                                    const notes = row.Notes || '';
-                                                    const match = notes.match(/مشتری\s*:\s*([^|]+)/) || notes.match(/تامین کننده\s*:\s*([^|]+)/);
-                                                    return match ? match[1].trim() : notes;
-                                                })() || 'نامعلوم';
-                                                
-                                                if (invoicesMap.has(key)) {
-                                                    const existing = invoicesMap.get(key)!;
-                                                    existing.totalAmount += itemAmt;
-                                                    existing.totalQuantity += itemQty;
-                                                    existing.items.push({
-                                                        itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
-                                                        itemCode: row.ItemCode || '',
-                                                        groupName: row.GroupName || '',
-                                                        quantity: itemQty,
-                                                        amount: itemAmt,
-                                                        itemNotes: row.ItemNotes || ''
-                                                    });
-                                                } else {
-                                                    invoicesMap.set(key, {
-                                                        docId: row.DocId,
-                                                        invoiceNum: row.InvoiceNum || row.DocId,
-                                                        date: row.Date,
-                                                        customerName: customerName,
-                                                        notes: row.Notes || '',
-                                                        totalAmount: itemAmt,
-                                                        totalQuantity: itemQty,
-                                                        items: [{
-                                                            itemName: row.ItemName || row.GroupName || 'کالای بدون نام',
-                                                            itemCode: row.ItemCode || '',
-                                                            groupName: row.GroupName || '',
-                                                            quantity: itemQty,
-                                                            amount: itemAmt,
-                                                            itemNotes: row.ItemNotes || ''
-                                                        }]
-                                                    });
-                                                }
-                                            });
-                                            
-                                            const groupedList = Array.from(invoicesMap.values());
-                                            
-                                            if (groupedList.length === 0) {
-                                                return (
-                                                    <tr>
-                                                        <td colSpan={7} className="p-8 text-center text-slate-400 text-sm">{salesViewMode === 'range' ? 'هیچ فاکتور فروشی برای بازه زمانی انتخابی ثبت نشده است' : 'هیچ فاکتور فروشی برای تاریخ انتخابی ثبت نشده است'}</td>
-                                                    </tr>
-                                                );
-                                            }
-                                            
-                                            return groupedList.map((inv, idx) => {
-                                                const isExpanded = expandedInvoiceId === inv.invoiceNum;
-                                                return (
-                                                    <React.Fragment key={inv.invoiceNum}>
-                                                        <tr 
-                                                            onClick={() => setExpandedInvoiceId(isExpanded ? null : inv.invoiceNum)}
-                                                            className="hover:bg-slate-50 transition-colors cursor-pointer"
-                                                        >
-                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                            <td className="p-3 font-mono font-bold text-blue-600">{inv.invoiceNum}</td>
-                                                            <td className="p-3 font-bold text-slate-800">{inv.customerName}</td>
-                                                            <td className="p-3 text-center font-mono font-semibold text-slate-500">{inv.items.length} کالا</td>
-                                                            <td className="p-3 text-center font-mono font-bold text-slate-600">{inv.totalQuantity.toFixed(1)}</td>
-                                                            <td className="p-3 text-left font-mono font-black text-emerald-600">{formatMoney(inv.totalAmount)}</td>
-                                                            <td className="p-3 text-center">
-                                                                <button className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold focus:outline-none">
-                                                                    <span>{isExpanded ? 'بستن' : 'مشاهده'}</span>
-                                                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                        {isExpanded && (
-                                                            <tr className="bg-slate-50/50">
-                                                                <td colSpan={7} className="p-4 bg-slate-50/30">
-                                                                    <div className="border border-slate-200 rounded-lg bg-white p-3 shadow-inner">
-                                                                        <div className="text-[11px] font-bold text-slate-500 mb-2 pb-1 border-b border-slate-100 flex justify-between">
-                                                                            <span>جزئیات فاکتور {inv.invoiceNum}</span>
-                                                                            {inv.notes && (
-                                                                                <span className="text-slate-400 font-mono text-[10px]">توضیحات فاکتور: {inv.notes}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <table className="w-full text-right text-[11px]">
-                                                                            <thead>
-                                                                                <tr className="text-slate-500 border-b border-slate-100">
-                                                                                    <th className="py-2 px-3 font-semibold text-center w-12">#</th>
-                                                                                    <th className="py-2 px-3 font-semibold">گروه کالا</th>
-                                                                                    <th className="py-2 px-3 font-semibold">شرح کالا</th>
-                                                                                    <th className="py-2 px-3 font-semibold text-center">مقدار/وزن</th>
-                                                                                    <th className="py-2 px-3 font-semibold text-left font-mono">فی واحد (ریال)</th>
-                                                                                    <th className="py-2 px-3 font-semibold text-left">مجموع مبلغ (ریال)</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody className="divide-y divide-slate-150">
-                                                                                {inv.items.map((item, itemIdx) => {
-                                                                                    const fee = item.quantity > 0 ? Math.round(item.amount / item.quantity) : 0;
-                                                                                    return (
-                                                                                        <tr key={itemIdx} className="hover:bg-slate-50/30">
-                                                                                            <td className="py-2 px-3 text-center text-slate-400 font-mono">{itemIdx + 1}</td>
-                                                                                            <td className="py-2 px-3 text-slate-500">{item.groupName || '-'}</td>
-                                                                                            <td className="py-2 px-3 font-medium text-slate-800">
-                                                                                                {item.itemName}
-                                                                                                {item.itemNotes && (
-                                                                                                    <span className="block text-[9px] text-slate-400 mt-0.5">{item.itemNotes}</span>
-                                                                                                )}
-                                                                                            </td>
-                                                                                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-600">{item.quantity.toFixed(1)}</td>
-                                                                                            <td className="py-2 px-3 text-left font-mono font-bold text-slate-500">{fee > 0 ? formatMoney(fee) : '-'}</td>
-                                                                                            <td className="py-2 px-3 text-left font-mono font-bold text-slate-700">{formatMoney(item.amount)}</td>
-                                                                                        </tr>
-                                                                                    );
-                                                                                })}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </React.Fragment>
-                                                );
-                                            });
-                                        })()}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Render Recharts Visual Comparison */}
-                        {compareMode && chartData.length > 0 && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
-                                    <h3 className="text-xs font-black text-slate-800 mb-4 text-center">مقایسه فروش گروه کالایی از نظر مبلغ (ریال)</h3>
-                                    <div className="h-64">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={chartData}>
-                                                <CartesianGrid strokeDasharray="3 3" />
-                                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                                <YAxis tick={{ fontSize: 10 }} />
-                                                <Tooltip />
-                                                <Legend wrapperStyle={{ fontSize: 10 }} />
-                                                <Bar dataKey="amountA" name="بازه اول (A)" fill="#3b82f6" />
-                                                <Bar dataKey="amountB" name="بازه دوم (B)" fill="#818cf8" />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
-                                    <h3 className="text-xs font-black text-slate-800 mb-4 text-center">مقایسه حجم فروش گروه کالایی از نظر وزن (کیلوگرم)</h3>
-                                    <div className="h-64">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={chartData}>
-                                                <CartesianGrid strokeDasharray="3 3" />
-                                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                                <YAxis tick={{ fontSize: 10 }} />
-                                                <Tooltip />
-                                                <Legend wrapperStyle={{ fontSize: 10 }} />
-                                                <Bar dataKey="weightA" name="بازه اول (A)" fill="#10b981" />
-                                                <Bar dataKey="weightB" name="بازه دوم (B)" fill="#6366f1" />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Detailed Sales comparison tables */}
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <h3 className="text-sm font-bold text-slate-800">
-                                    {compareMode ? 'جدول مقایسه‌ای جزئی گروه کالایی (مبلغ و وزن)' : 'جدول ریز تراکنش‌های فاکتور فروش'}
-                                </h3>
-                                {!compareMode && salesData.length > 500 && (
-                                    <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-semibold">
-                                        در حال نمایش ۵۰۰ فاکتور اخیر از مجموع {salesData.length.toLocaleString('fa-IR')} مورد جهت سرعت بالا
-                                    </span>
-                                )}
-                            </div>
-                            
-                            <div className="rounded-xl border border-slate-200 overflow-hidden max-h-[400px] overflow-y-auto">
-                                {/* Desktop view */}
-                                <table className="w-full text-right text-xs hidden md:table">
-                                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
-                                        {compareMode ? (
-                                            <tr>
-                                                <th className="p-3 w-10 text-center">ردیف</th>
-                                                <th className="p-3">{compareGroupBy === 'group' ? 'گروه کالایی' : 'نام دقیق محصول'}</th>
-                                                <th className="p-3 text-center bg-blue-900/40 text-blue-100">وزن خالص A (ک‌گ)</th>
-                                                <th className="p-3 text-left bg-blue-900/40 text-blue-100">فروش خالص A (ریال)</th>
-                                                <th className="p-3 text-left bg-blue-900/40 text-blue-100">فی نهایی A (ریال)</th>
-                                                <th className="p-3 text-center bg-indigo-900/40 text-indigo-100">وزن خالص B (ک‌گ)</th>
-                                                <th className="p-3 text-left bg-indigo-900/40 text-indigo-100">فروش خالص B (ریال)</th>
-                                                <th className="p-3 text-left bg-indigo-900/40 text-indigo-100">فی نهایی B (ریال)</th>
-                                                <th className="p-3 text-center">تغییر وزن (%)</th>
-                                                <th className="p-3 text-center">تغییر فروش (%)</th>
-                                                <th className="p-3 text-center">تغییر فی (%)</th>
-                                            </tr>
-                                        ) : (
-                                            <tr>
-                                                <th className="p-3.5 font-bold text-slate-700 w-24">تاریخ فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 w-24">شماره فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 w-36">گروه کالا</th>
-                                                <th className="p-3.5 font-bold text-slate-700">شرح کالای فاکتور</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-24">وزن خالص (ک‌گ)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-24">وزن ناخالص (ک‌گ)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-32">فی واحد (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left w-36">مجموع مبلغ (ریال)</th>
-                                            </tr>
-                                        )}
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {compareMode ? (
-                                            chartData.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={11} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</td>
-                                                </tr>
-                                            ) : (
-                                                chartData.map((row, idx) => {
-                                                    const weightDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;
-                                                    const amountDiff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
-                                                    const feeA = row.finalPriceA || (row.netWeightA ? row.netAmountA / row.netWeightA : 0);
-                                                    const feeB = row.finalPriceB || (row.netWeightB ? row.netAmountB / row.netWeightB : 0);
-                                                    const feeDiff = feeB ? ((feeA - feeB) / feeB) * 100 : 0;
-
-                                                    return (
-                                                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                                                            <td className="p-3 font-bold text-slate-900">{row.name}</td>
-                                                            
-                                                            {/* Period A */}
-                                                            <td className="p-3 text-center bg-blue-50/40">
-                                                                <div className="font-mono font-bold text-blue-950">{row.netWeightA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
-                                                                {row.retWeightA > 0 && <div className="text-[9px] text-rose-600 font-semibold">مرجوعی: {row.retWeightA.toFixed(1)}</div>}
-                                                            </td>
-                                                            <td className="p-3 text-left font-mono font-bold text-blue-950 bg-blue-50/40">{formatMoney(row.netAmountA)}</td>
-                                                            <td className="p-3 text-left font-mono font-bold text-emerald-800 bg-blue-50/40">{formatMoney(Math.round(feeA))}</td>
-
-                                                            {/* Period B */}
-                                                            <td className="p-3 text-center bg-indigo-50/40">
-                                                                <div className="font-mono font-bold text-indigo-950">{row.netWeightB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
-                                                                {row.retWeightB > 0 && <div className="text-[9px] text-rose-600 font-semibold">مرجوعی: {row.retWeightB.toFixed(1)}</div>}
-                                                            </td>
-                                                            <td className="p-3 text-left font-mono font-bold text-indigo-950 bg-indigo-50/40">{formatMoney(row.netAmountB)}</td>
-                                                            <td className="p-3 text-left font-mono font-bold text-emerald-800 bg-indigo-50/40">{formatMoney(Math.round(feeB))}</td>
-
-                                                            {/* Diffs */}
-                                                            <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${weightDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                                                                    {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${amountDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                                                                    {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${feeDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                                                                    {feeDiff >= 0 ? '+' : ''}{feeDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )
-                                        ) : (
-                                            salesData.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</td>
-                                                </tr>
-                                            ) : (
-                                                salesData.slice(0, 500).map((row, idx) => {
-                                                    const netW = parseNetWeight(row);
-                                                    const grossW = parseGrossWeight(row);
-                                                    const fee = parseFee(row, netW);
-                                                    const isRet = row.OpCode === '13';
-                                                    return (
-                                                        <tr key={idx} className={`hover:bg-slate-50/50 transition-colors ${isRet ? 'bg-rose-50' : ''}`}>
-                                                            <td className="p-3 font-medium text-slate-500 whitespace-nowrap">{formatDateToJalali(row.Date)}</td>
-                                                            <td className="p-3 font-mono text-slate-600 font-semibold">{row.InvoiceNum || row.DocId}</td>
-                                                            <td className="p-3 font-bold text-slate-800">{row.GroupName || 'سایر گروه‌ها'}</td>
-                                                            <td className="p-3 font-semibold text-slate-900">
-                                                                {isRet ? <span className="bg-rose-100 text-rose-700 px-1 py-0.5 rounded text-[9px] ml-1">مرجوعی</span> : null}
-                                                                {row.ItemName || 'کالای فروخته شده'}
-                                                                {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal">{row.ItemNotes}</span>}
-                                                            </td>
-                                                            <td className="p-3 text-left font-mono font-medium text-slate-700">{netW.toFixed(2)}</td>
-                                                            <td className="p-3 text-left font-mono font-medium text-slate-500">{grossW > 0 ? grossW.toFixed(2) : '-'}</td>
-                                                            <td className="p-3 text-left font-mono font-bold text-emerald-700">{fee > 0 ? formatMoney(fee) : '-'}</td>
-                                                            <td className="p-3 text-left font-mono font-black text-blue-700">{formatMoney(parseFloat(row.Amount || 0))}</td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )
-                                        )}
-                                    </tbody>
-                                    {compareMode && chartData.length > 0 && (
-                                        <tfoot>
-                                            <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
-                                                <td colSpan={2} className="p-3 text-right">جمع کل کارخانه:</td>
-                                                {(() => {
-                                                    let sumNetWA = 0, sumNetWB = 0, sumNetAmtA = 0, sumNetAmtB = 0;
-                                                    chartData.forEach(r => {
-                                                        sumNetWA += r.netWeightA || 0;
-                                                        sumNetWB += r.netWeightB || 0;
-                                                        sumNetAmtA += r.netAmountA || 0;
-                                                        sumNetAmtB += r.netAmountB || 0;
-                                                    });
-                                                    const totWeightDiff = sumNetWB ? ((sumNetWA - sumNetWB) / sumNetWB) * 100 : 0;
-                                                    const totAmountDiff = sumNetAmtB ? ((sumNetAmtA - sumNetAmtB) / sumNetAmtB) * 100 : 0;
-                                                    const avgFeeA = sumNetWA ? (sumNetAmtA / sumNetWA) : 0;
-                                                    const avgFeeB = sumNetWB ? (sumNetAmtB / sumNetWB) : 0;
-                                                    const totFeeDiff = avgFeeB ? ((avgFeeA - avgFeeB) / avgFeeB) * 100 : 0;
-
-                                                    return (
-                                                        <>
-                                                            <td className="p-3 text-center font-mono text-blue-300">{sumNetWA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                            <td className="p-3 text-left font-mono text-blue-300">{formatMoney(sumNetAmtA)}</td>
-                                                            <td className="p-3 text-left font-mono text-emerald-400">{formatMoney(Math.round(avgFeeA))}</td>
-                                                            <td className="p-3 text-center font-mono text-indigo-300">{sumNetWB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                                                            <td className="p-3 text-left font-mono text-indigo-300">{formatMoney(sumNetAmtB)}</td>
-                                                            <td className="p-3 text-left font-mono text-emerald-400">{formatMoney(Math.round(avgFeeB))}</td>
-                                                            <td className="p-3 text-center font-mono">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totWeightDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                                                                    {totWeightDiff >= 0 ? '+' : ''}{totWeightDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-center font-mono">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totAmountDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                                                                    {totAmountDiff >= 0 ? '+' : ''}{totAmountDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-center font-mono">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totFeeDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                                                                    {totFeeDiff >= 0 ? '+' : ''}{totFeeDiff.toFixed(1)}%
-                                                                </span>
-                                                            </td>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </tr>
-                                        </tfoot>
-                                    )}
-                                </table>
-
-                                {/* Mobile view */}
-                                <div className="block md:hidden divide-y divide-slate-100 bg-white">
-                                    {compareMode ? (
-                                        chartData.length === 0 ? (
-                                            <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</div>
-                                        ) : (
-                                            <>
-                                            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2 justify-between items-center">
-                                                <h4 className="text-sm font-bold text-slate-800">گزارش مقایسه ای فروش (A نسبت به B)</h4>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            const printWindow = window.open('', '_blank');
-                                                            if (!printWindow) return;
-                                                            let html = '<html dir="rtl"><head><title>چاپ مقایسه فروش</title><style>body{font-family:Tahoma,sans-serif;margin:20px;direction:rtl}table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#f1f5f9}.diff{direction:ltr;display:inline-block}.ret{color:#e11d48;font-size:10px}</style></head><body>';
-                                                            html += '<h2>گزارش مقایسه ای فروش</h2>';
-                                                            html += '<table><thead><tr><th>گروه کالا</th><th>خالص A (kg)</th><th>مبلغ A (ریال)</th><th>خالص B (kg)</th><th>مبلغ B (ریال)</th><th>رشد مبلغ</th></tr></thead><tbody>';
-                                                            let sumA = 0, sumB = 0;
-                                                            chartData.forEach(row => {
-                                                                sumA += row.netAmountA || 0;
-                                                                sumB += row.netAmountB || 0;
-                                                                const diff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
-                                                                html += `<tr>
-                                                                    <td><strong>${row.name}</strong></td>
-                                                                    <td>${(row.netWeightA || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightA || 0).toFixed(2)}</span></td>
-     <td>${(row.netWeightA ? (row.netAmountA / row.netWeightA) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0})}</td>
-     <td>${(row.netAmountA || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountA || 0).toLocaleString('fa-IR')}</span></td>
-     <td>${(row.netWeightB || 0).toFixed(2)}<br><span class="ret">مرجوعی: ${(row.retWeightB || 0).toFixed(2)}</span></td>
-     <td>${(row.netWeightB ? (row.netAmountB / row.netWeightB) : 0).toLocaleString('fa-IR', {maximumFractionDigits:0})}</td>
-     <td>${(row.netAmountB || 0).toLocaleString('fa-IR')}<br><span class="ret">مرجوعی: ${(row.retAmountB || 0).toLocaleString('fa-IR')}</span></td>
-                                                                    <td class="diff" style="color: ${diff>=0?'#16a34a':'#dc2626'}">${diff>0?'+':''}${diff.toFixed(1)}%</td>
-                                                                </tr>`;
-                                                            });
-                                                            const totDiff = sumB ? ((sumA - sumB) / sumB) * 100 : 0;
-                                                            html += `<tr>
-                                                                <th>جمع کل</th>
-     <th>-</th>
-     <th>-</th>
-     <th>${sumA.toLocaleString('fa-IR')}</th>
-     <th>-</th>
-     <th>-</th>
-     <th>${sumB.toLocaleString('fa-IR')}</th>
-                                                                <th class="diff" style="color: ${totDiff>=0?'#16a34a':'#dc2626'}">${totDiff>0?'+':''}${totDiff.toFixed(1)}%</th>
-                                                            </tr>`;
-                                                            html += '</tbody></table></body></html>';
-                                                            printWindow.document.write(html);
-                                                            printWindow.document.close();
-                                                            printWindow.focus();
-                                                            setTimeout(() => { printWindow.print(); }, 500);
-                                                        }}
-                                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                                                    >
-                                                        <Printer className="w-3.5 h-3.5" />
-                                                        چاپ (Print)
-                                                    </button>
-                                                <button
-                                                    onClick={async () => {
-                                                        try {
-                                                            const res = await fetch('/api/sayan/sales-report/send-compare', {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ chartData, dateFromA: dateFrom, dateToA: dateTo, dateFromB: salesDateFromB, dateToB: salesDateToB })
-                                                            });
-                                                            const data = await res.json();
-                                                            if (res.ok && data.success) {
-                                                                alert(`✅ ${data.message}`);
-                                                            } else {
-                                                                alert(`❌ خطا در ارسال: ${data.error || 'ناشناخته'}`);
-                                                            }
-                                                        } catch (err) {
-                                                            alert('❌ خطای ارتباط با سرور');
-                                                        }
-                                                    }}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
-                                                >
-                                                    <Send className="w-3.5 h-3.5" />
-                                                    ارسال دستی به ربات
-                                                </button>
-                                                </div>
-                                            </div>
-                                            {chartData.map((row, idx) => {
-                                                const weightDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;
-                                                const amountDiff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
-                                                const avgFeeA = row.netWeightA ? (row.netAmountA / row.netWeightA) : 0;
-                                                const avgFeeB = row.netWeightB ? (row.netAmountB / row.netWeightB) : 0;
-                                                return (
-                                                    <div key={idx} className="p-4 space-y-3 border-b border-slate-100 last:border-0">
-                                                        <h4 className="text-sm font-black text-slate-900">{row.name}</h4>
-                                                        <div className="grid grid-cols-2 gap-3 text-xs">
-                                                            <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
-                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه وزن خالص (kg)</span>
-                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed space-y-0.5">
-                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
-                                                                        <span>A: {row.netWeightA.toFixed(1)}</span>
-                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold" title="مرجوعی A">م {row.retWeightA.toFixed(1)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
-                                                                        <span>B: {row.netWeightB.toFixed(1)}</span>
-                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold" title="مرجوعی B">م {row.retWeightB.toFixed(1)}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${weightDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                                    {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}% تغییر خالص
-                                                                </span>
-                                                            </div>
-                                                            <div className="bg-slate-50 p-2.5 rounded-xl space-y-1">
-                                                                <span className="text-[10px] text-slate-400 font-medium block">مقایسه مبلغ خالص و میانگین فی (ریال)</span>
-                                                                <div className="flex flex-col text-[10px] font-mono font-semibold text-slate-700 leading-relaxed space-y-0.5">
-                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
-                                                                        <span className="flex flex-col">
-                                                                            <span>A: {formatMoney(row.netAmountA)}</span>
-                                                                            <span className="text-[8px] text-indigo-500 font-sans font-bold">میانگین فی: {formatMoney(avgFeeA)}</span>
-                                                                        </span>
-                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold flex flex-col items-end" title="مرجوعی A">
-                                                                            <span>مبلغ: م {formatMoney(row.retAmountA)}</span>
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-center bg-white px-1.5 py-0.5 rounded shadow-sm border border-slate-100">
-                                                                        <span className="flex flex-col">
-                                                                            <span>B: {formatMoney(row.netAmountB)}</span>
-                                                                            <span className="text-[8px] text-indigo-500 font-sans font-bold">میانگین فی: {formatMoney(avgFeeB)}</span>
-                                                                        </span>
-                                                                        <span className="text-[8px] text-rose-500 font-sans font-bold flex flex-col items-end" title="مرجوعی B">
-                                                                            <span>مبلغ: م {formatMoney(row.retAmountB)}</span>
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold ${amountDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                                                    {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}% تغییر مبلغ خالص
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                            </>
-                                        )
-                                    ) : (
-                                        salesData.length === 0 ? (
-                                            <div className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. بازه را تغییر دهید.</div>
-                                        ) : (
-                                            salesData.slice(0, 500).map((row, idx) => {
-                                                const netW = parseNetWeight(row);
-                                                const grossW = parseGrossWeight(row);
-                                                const fee = parseFee(row, netW);
-                                                const isRet = row.OpCode === '13';
-                                                return (
-                                                    <div key={idx} className={`p-4 space-y-2 text-xs ${isRet ? 'bg-rose-50' : ''}`}>
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-[10px] text-slate-400 font-bold font-mono">فاکتور: {row.InvoiceNum || row.DocId} | {formatDateToJalali(row.Date)}</span>
-                                                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[9px] font-extrabold">{row.GroupName || 'سایر'}</span>
-                                                        </div>
-                                                        <h4 className="text-sm font-bold text-slate-800 leading-relaxed">
-                                                            {isRet ? <span className="bg-rose-100 text-rose-700 px-1 py-0.5 rounded text-[9px] ml-1">مرجوعی</span> : null}
-                                                            {row.ItemName || 'کالای فروخته شده'}
-                                                            {row.ItemNotes && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{row.ItemNotes}</span>}
-                                                        </h4>
-                                                        <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg font-mono">
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-400 font-sans block">وزن خالص</span>
-                                                                <span className="font-bold text-slate-700 text-xs">{netW.toFixed(2)} kg</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-400 font-sans block">وزن ناخالص</span>
-                                                                <span className="font-bold text-slate-600 text-xs">{grossW > 0 ? `${grossW.toFixed(2)} kg` : '-'}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-400 font-sans block">فی واحد</span>
-                                                                <span className="font-bold text-emerald-700 text-xs">{fee > 0 ? formatMoney(fee) : '-'} ریال</span>
-                                                            </div>
-                                                            <div className="text-left">
-                                                                <span className="text-[9px] text-slate-400 font-sans block">مبلغ کل</span>
-                                                                <span className="font-black text-blue-700 text-xs">{formatMoney(parseFloat(row.Amount || 0))} ریال</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        )
-                                    )}
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 )}
 
