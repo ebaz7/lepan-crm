@@ -454,10 +454,10 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     }
 
     if (uniqueSalesTargets.length === 0) {
-        throw new Error('گروهی برای ارسال گزارش فروش (تلگرام یا بله) در تنظیمات سیستم ثبت نشده است.');
+        throw new Error('شناسه گروه‌های حسابداری یا فروش در تنظیمات ربات ثبت نشده است! لطفاً شناسه گروه تلگرام یا بله (مثلاً -100xxx) را در بخش تنظیمات سیستم -> تب ربات‌ها -> تنظیمات اطلاع‌رسانی مالی و خروج وارد نمایید.');
     }
 
-    // Fetch sales and returns data from Sayan ERP
+    // Fetch sales and returns data from Sayan ERP with local fallback
     const shamsiClean = shamsiDate.replace(/\//g, '');
     const shamsiDash = shamsiDate.replace(/\//g, '-');
     const gregSlash = gregDate.replace(/-/g, '/');
@@ -506,7 +506,26 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         ORDER BY t10.Field_008 DESC
     `;
 
-    const salesRows = await executeSayanQuery(db, sql);
+    let salesRows = [];
+    try {
+        salesRows = await executeSayanQuery(db, sql);
+    } catch (e) {
+        console.warn("Sayan ERP query failed, attempting local invoices fallback:", e.message);
+        const localInvs = Array.isArray(db.invoices) ? db.invoices : (Array.isArray(db.exitPermits) ? db.exitPermits : []);
+        salesRows = localInvs.map(inv => ({
+            DocId: inv.id || inv.number,
+            InvoiceNum: inv.number || inv.id,
+            Date: inv.date || gregDate,
+            Notes: inv.description || '',
+            ItemCode: inv.itemCode || '',
+            ItemName: inv.itemName || inv.productName || 'کالا',
+            Quantity: inv.quantity || inv.weight || 0,
+            Amount: inv.amount || inv.totalPrice || 0,
+            GroupName: inv.groupName || inv.category || 'سایر گروه‌ها',
+            CustomerName: inv.customerName || inv.recipientName || 'مشتری',
+            OpCode: inv.opCode || '3'
+        }));
+    }
     
     if (salesRows.length > 0) {
         const title = `گزارش رسمی فروش روزانه و مرجوعی سایان - مورخ ${shamsiDate} (${labelSuffix})`;

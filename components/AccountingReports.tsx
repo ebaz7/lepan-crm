@@ -1077,30 +1077,57 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const handlePrintTodaySales = () => {
         const todayInvs = getTodayInvoices();
         const activeDate = dateTo || formatDateToJalali(new Date().toISOString());
-        const title = `گزارش رسمی فروش روزانه (${activeDate})`;
+        const title = `گزارش مدیریتی و رسمی فروش روزانه (${activeDate})`;
 
-        // Group todayInvs by GroupName and ItemName (summing weights and amounts)
-        const groupedMap = new Map<string, { itemName: string; groupName: string; totalQty: number; totalAmt: number }>();
+        // Group todayInvs by GroupName and ItemName with returns & net calculations
+        const groupedMap = new Map<string, { 
+            itemName: string; 
+            groupName: string; 
+            grossQty: number; 
+            grossAmt: number; 
+            retQty: number; 
+            retAmt: number;
+        }>();
+
+        let totalGrossAmt = 0;
+        let totalGrossQty = 0;
+        let totalRetAmt = 0;
+        let totalRetQty = 0;
+
         todayInvs.forEach(inv => {
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
             const amt = parseFloat(inv.Amount || 0);
-            
-            if (groupedMap.has(key)) {
-                const existing = groupedMap.get(key)!;
-                existing.totalQty += qty;
-                existing.totalAmt += amt;
-            } else {
+            const isReturn = inv.OpCode === '13' || inv.OpCode === '14';
+
+            if (!groupedMap.has(key)) {
                 groupedMap.set(key, {
                     itemName: inv.ItemName || 'کالای بدون نام',
                     groupName: inv.GroupName || 'سایر گروه‌ها',
-                    totalQty: qty,
-                    totalAmt: amt
+                    grossQty: 0,
+                    grossAmt: 0,
+                    retQty: 0,
+                    retAmt: 0
                 });
+            }
+            const item = groupedMap.get(key)!;
+            if (isReturn) {
+                item.retQty += qty;
+                item.retAmt += amt;
+                totalRetQty += qty;
+                totalRetAmt += amt;
+            } else {
+                item.grossQty += qty;
+                item.grossAmt += amt;
+                totalGrossQty += qty;
+                totalGrossAmt += amt;
             }
         });
         
         const groupedRows = Array.from(groupedMap.values());
+        const totalNetAmt = totalGrossAmt - totalRetAmt;
+        const totalNetQty = totalGrossQty - totalRetQty;
+        const totalNetFee = totalNetQty > 0 ? (totalNetAmt / totalNetQty) : 0;
         const totalUniqueInvs = new Set(todayInvs.map(inv => inv.InvoiceNum || inv.DocId)).size;
 
         const docHtml = `
@@ -1109,25 +1136,27 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 <meta charset="utf-8">
                 <title>${title}</title>
                 <style>
-                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 30px; background: #fff; color: #333; }
-                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
-                    .header h1 { margin: 0; font-size: 22px; color: #0f172a; font-weight: bold; }
-                    .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
-                    .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
-                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
-                    .stat-card h3 { margin: 0 0 8px 0; font-size: 11px; color: #64748b; font-weight: bold; }
-                    .stat-card p { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 12px 14px; text-align: right; font-size: 12px; line-height: 1.6; }
-                    th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
+                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 25px; background: #fff; color: #1e293b; font-size: 11px; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; }
+                    .header h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: bold; }
+                    .header p { margin: 4px 0 0; font-size: 12px; color: #64748b; }
+                    .stats-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+                    .stat-card { border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 8px; text-align: center; }
+                    .stat-card h3 { margin: 0 0 4px 0; font-size: 10px; color: #64748b; font-weight: bold; }
+                    .stat-card p { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; font-family: monospace; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: center; font-size: 11px; line-height: 1.4; }
+                    th { background-color: #0f172a; color: white; font-weight: bold; border: 1px solid #334155; }
                     tr:nth-child(even) { background-color: #f8fafc; }
-                    .total { font-weight: bold; background: #e2e8f0 !important; }
-                    .footer { text-align: center; margin-top: 45px; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
-                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 60px; text-align: center; font-size: 12px; font-weight: bold; }
-                    .signature-box { height: 100px; border-bottom: 1px solid #cbd5e1; margin-bottom: 10px; }
+                    .total { font-weight: bold; background: #1e293b !important; color: white !important; }
+                    .total td { border-color: #475569; color: white; }
+                    .ret { color: #e11d48; font-weight: bold; }
+                    .net { color: #15803d; font-weight: bold; }
+                    .footer { text-align: center; margin-top: 35px; font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 10px; }
+                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; text-align: center; font-size: 11px; font-weight: bold; }
+                    .signature-box { height: 60px; border-bottom: 1px dashed #94a3b8; margin-top: 8px; }
                     @media print {
                         body { padding: 0; }
-                        button { display: none; }
                     }
                 </style>
             </head>
@@ -1135,58 +1164,85 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 <div class="header">
                     <div>
                         <h1>${title}</h1>
-                        <p>سیستم یکپارچه گزارشات فروش سایان ERP</p>
+                        <p>سیستم یکپارچه گزارشات مدیریتی سایان ERP - تفکیک فروش عادی و مرجوعی</p>
                     </div>
                     <div style="text-align: left;">
-                        <p>تاریخ فاکتورها: ${activeDate}</p>
+                        <p>تاریخ فاکتورها: <strong>${activeDate}</strong></p>
                         <p>تاریخ چاپ: ${formatDateToJalali(new Date().toISOString())}</p>
                     </div>
                 </div>
 
                 <div class="stats-container">
                     <div class="stat-card">
-                        <h3>تعداد فاکتورها</h3>
-                        <p>${totalUniqueInvs} فاکتور</p>
+                        <h3>فروش ناخالص (ریال)</h3>
+                        <p>${formatMoney(totalGrossAmt)}</p>
                     </div>
                     <div class="stat-card">
-                        <h3>مجموع وزن فروش</h3>
-                        <p>${todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Quantity || 0), 0).toFixed(1)} کیلوگرم</p>
+                        <h3>مرجوعی کد ۱۳ (ریال)</h3>
+                        <p class="ret">${formatMoney(totalRetAmt)}</p>
                     </div>
                     <div class="stat-card">
-                        <h3>مبلغ کل فروش</h3>
-                        <p>${formatMoney(todayInvs.reduce((sum, inv) => sum + parseFloat(inv.Amount || 0), 0))} ریال</p>
+                        <h3>فروش خالص نهایی (ریال)</h3>
+                        <p class="net">${formatMoney(totalNetAmt)}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>وزن خالص کل (ک‌گ)</h3>
+                        <p>${totalNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>فی خالص نهایی (ریال/ک‌گ)</h3>
+                        <p>${formatMoney(Math.round(totalNetFee))}</p>
                     </div>
                 </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 50px; text-align: center;">ردیف</th>
-                            <th style="width: 150px;">گروه کالا</th>
+                            <th style="width: 35px;">ردیف</th>
+                            <th>گروه کالا</th>
                             <th>نام کالا / محصول</th>
-                            <th style="width: 120px; text-align: center;">جمع وزنی (ک‌گ)</th>
-                            <th style="width: 180px; text-align: left;">جمع ریالی (ریال)</th>
+                            <th>فروش ناخالص (ک‌گ / ریال)</th>
+                            <th>مرجوعی کد ۱۳ (ک‌گ / ریال)</th>
+                            <th>فروش خالص نهایی (ک‌گ / ریال)</th>
+                            <th>فی خالص نهایی (ریال)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${groupedRows.length > 0 ? groupedRows.map((row, idx) => `
+                        ${groupedRows.length > 0 ? groupedRows.map((row, idx) => {
+                            const netAmt = row.grossAmt - row.retAmt;
+                            const netQty = row.grossQty - row.retQty;
+                            const netFee = netQty > 0 ? (netAmt / netQty) : 0;
+                            return `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td style="font-weight: bold; color: #334155;">${row.groupName}</td>
+                                    <td style="text-align: right; font-weight: 600;">${row.itemName}</td>
+                                    <td>
+                                        ${row.grossQty.toFixed(1)} ک‌گ<br/>
+                                        <span style="font-family: monospace;">${formatMoney(row.grossAmt)}</span>
+                                    </td>
+                                    <td className="ret">
+                                        ${row.retQty > 0 ? `${row.retQty.toFixed(1)} ک‌گ<br/><span style="font-family: monospace; color: #e11d48;">${formatMoney(row.retAmt)}</span>` : '-'}
+                                    </td>
+                                    <td className="net">
+                                        <strong>${netQty.toFixed(1)} ک‌گ</strong><br/>
+                                        <span style="font-family: monospace; font-weight: bold; color: #15803d;">${formatMoney(netAmt)}</span>
+                                    </td>
+                                    <td style="font-family: monospace; font-weight: bold;">${formatMoney(Math.round(netFee))}</td>
+                                </tr>
+                            `;
+                        }).join('') : `
                             <tr>
-                                <td style="text-align: center;">${idx + 1}</td>
-                                <td>${row.groupName}</td>
-                                <td style="font-weight: bold;">${row.itemName}</td>
-                                <td style="text-align: center; font-family: monospace; font-weight: bold;">${row.totalQty.toFixed(1)}</td>
-                                <td style="text-align: left; font-family: monospace; font-weight: 800;">${formatMoney(row.totalAmt)}</td>
-                            </tr>
-                        `).join('') : `
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">هیچ فاکتور فروشی برای این روز ثبت نشده است.</td>
+                                <td colspan="7" style="text-align: center; padding: 30px; color: #64748b;">هیچ فاکتور فروشی برای این روز ثبت نشده است.</td>
                             </tr>
                         `}
                         ${groupedRows.length > 0 ? `
                         <tr class="total">
-                            <td colspan="3" style="text-align: left;">جمع کل فاکتورها:</td>
-                            <td style="text-align: center; font-family: monospace;">${groupedRows.reduce((sum, r) => sum + r.totalQty, 0).toFixed(1)}</td>
-                            <td style="text-align: left; font-family: monospace;">${formatMoney(groupedRows.reduce((sum, r) => sum + r.totalAmt, 0))}</td>
+                            <td colspan="3" style="text-align: left;">جمع کل فروش روزانه:</td>
+                            <td>${totalGrossQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalGrossAmt)}</td>
+                            <td>${totalRetQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalRetAmt)}</td>
+                            <td>${totalNetQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalNetAmt)}</td>
+                            <td>${formatMoney(Math.round(totalNetFee))}</td>
                         </tr>
                         ` : ''}
                     </tbody>
@@ -1208,7 +1264,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 </div>
 
                 <div class="footer">
-                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
+                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - مجموع فاکتورهای ثبت شده: ${totalUniqueInvs}</p>
                 </div>
             </body>
             </html>
@@ -1227,33 +1283,57 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     };
 
     const handlePrintPeriodSales = () => {
-        const title = 'گزارش جامع تراکنش‌های فروش دوره‌ای';
+        const title = `گزارش جامع و مدیریتی فروش دوره‌ای (${dateFrom} تا ${dateTo})`;
 
-        // Group salesData by GroupName and ItemName (summing weights and amounts)
-        const groupedMap = new Map<string, { itemName: string; groupName: string; totalNetW: number; totalGrossW: number; totalAmt: number }>();
+        // Group salesData by GroupName and ItemName with returns & net calculations
+        const groupedMap = new Map<string, { 
+            itemName: string; 
+            groupName: string; 
+            grossQty: number; 
+            grossAmt: number; 
+            retQty: number; 
+            retAmt: number;
+        }>();
+
+        let totalGrossAmt = 0;
+        let totalGrossQty = 0;
+        let totalRetAmt = 0;
+        let totalRetQty = 0;
+
         salesData.forEach(row => {
             const key = `${row.GroupName || ''}_${row.ItemName || ''}`;
-            const netW = parseNetWeight(row);
-            const grossW = parseGrossWeight(row);
+            const qty = parseFloat(row.Quantity || 0);
             const amt = parseFloat(row.Amount || 0);
-            
-            if (groupedMap.has(key)) {
-                const existing = groupedMap.get(key)!;
-                existing.totalNetW += netW;
-                existing.totalGrossW += grossW;
-                existing.totalAmt += amt;
-            } else {
+            const isReturn = row.OpCode === '13' || row.OpCode === '14';
+
+            if (!groupedMap.has(key)) {
                 groupedMap.set(key, {
                     itemName: row.ItemName || 'کالای بدون نام',
                     groupName: row.GroupName || 'سایر گروه‌ها',
-                    totalNetW: netW,
-                    totalGrossW: grossW,
-                    totalAmt: amt
+                    grossQty: 0,
+                    grossAmt: 0,
+                    retQty: 0,
+                    retAmt: 0
                 });
+            }
+            const item = groupedMap.get(key)!;
+            if (isReturn) {
+                item.retQty += qty;
+                item.retAmt += amt;
+                totalRetQty += qty;
+                totalRetAmt += amt;
+            } else {
+                item.grossQty += qty;
+                item.grossAmt += amt;
+                totalGrossQty += qty;
+                totalGrossAmt += amt;
             }
         });
         
         const groupedRows = Array.from(groupedMap.values());
+        const totalNetAmt = totalGrossAmt - totalRetAmt;
+        const totalNetQty = totalGrossQty - totalRetQty;
+        const totalNetFee = totalNetQty > 0 ? (totalNetAmt / totalNetQty) : 0;
 
         const docHtml = `
             <html dir="rtl" lang="fa">
@@ -1261,25 +1341,27 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 <meta charset="utf-8">
                 <title>${title}</title>
                 <style>
-                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 30px; background: #fff; color: #333; }
-                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 25px; }
-                    .header h1 { margin: 0; font-size: 22px; color: #0f172a; font-weight: bold; }
-                    .header p { margin: 6px 0 0; font-size: 13px; color: #475569; }
-                    .stats-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
-                    .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
-                    .stat-card h3 { margin: 0 0 8px 0; font-size: 11px; color: #64748b; font-weight: bold; }
-                    .stat-card p { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: 'Consolas', monospace; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; font-size: 11px; line-height: 1.5; }
-                    th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; border-bottom: 2px solid #94a3b8; }
+                    body { font-family: 'Tahoma', 'Segoe UI', sans-serif; padding: 25px; background: #fff; color: #1e293b; font-size: 11px; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; }
+                    .header h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: bold; }
+                    .header p { margin: 4px 0 0; font-size: 12px; color: #64748b; }
+                    .stats-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+                    .stat-card { border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 8px; text-align: center; }
+                    .stat-card h3 { margin: 0 0 4px 0; font-size: 10px; color: #64748b; font-weight: bold; }
+                    .stat-card p { margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; font-family: monospace; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: center; font-size: 11px; line-height: 1.4; }
+                    th { background-color: #0f172a; color: white; font-weight: bold; border: 1px solid #334155; }
                     tr:nth-child(even) { background-color: #f8fafc; }
-                    .total { font-weight: bold; background: #e2e8f0 !important; }
-                    .footer { text-align: center; margin-top: 45px; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
-                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 60px; text-align: center; font-size: 12px; font-weight: bold; }
-                    .signature-box { height: 100px; border-bottom: 1px solid #cbd5e1; margin-bottom: 10px; }
+                    .total { font-weight: bold; background: #1e293b !important; color: white !important; }
+                    .total td { border-color: #475569; color: white; }
+                    .ret { color: #e11d48; font-weight: bold; }
+                    .net { color: #15803d; font-weight: bold; }
+                    .footer { text-align: center; margin-top: 35px; font-size: 10px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 10px; }
+                    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; text-align: center; font-size: 11px; font-weight: bold; }
+                    .signature-box { height: 60px; border-bottom: 1px dashed #94a3b8; margin-top: 8px; }
                     @media print {
                         body { padding: 0; }
-                        button { display: none; }
                     }
                 </style>
             </head>
@@ -1287,63 +1369,87 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 <div class="header">
                     <div>
                         <h1>${title}</h1>
-                        <p>سیستم یکپارچه گزارشات فروش سایان ERP</p>
+                        <p>سامانه مدیریت هوشمند و تحلیل فروش سایان ERP</p>
                     </div>
                     <div style="text-align: left;">
-                        <p>بازه گزارش: از ${dateFrom} تا ${dateTo}</p>
-                        <p>تاریخ چاپ: ${formatDateToJalali(new Date().toISOString())}</p>
+                        <p>بازه زمانی: <strong>از ${dateFrom} تا ${dateTo}</strong></p>
+                        <p>تاریخ صدور: ${formatDateToJalali(new Date().toISOString())}</p>
                     </div>
                 </div>
 
                 <div class="stats-container">
                     <div class="stat-card">
-                        <h3>کل تراکنش‌های ثبت شده</h3>
-                        <p>${salesData.length} ردیف</p>
+                        <h3>فروش ناخالص (ریال)</h3>
+                        <p>${formatMoney(totalGrossAmt)}</p>
                     </div>
                     <div class="stat-card">
-                        <h3>کل وزن خالص فروخته شده</h3>
-                        <p>${salesData.reduce((sum, r) => sum + parseNetWeight(r), 0).toFixed(2)} کیلوگرم</p>
+                        <h3>مرجوعی کد ۱۳ (ریال)</h3>
+                        <p class="ret">${formatMoney(totalRetAmt)}</p>
                     </div>
                     <div class="stat-card">
-                        <h3>مبلغ کل فروش بازه</h3>
-                        <p>${formatMoney(salesData.reduce((sum, r) => sum + parseFloat(r.Amount || 0), 0))} ریال</p>
+                        <h3>فروش خالص نهایی (ریال)</h3>
+                        <p class="net">${formatMoney(totalNetAmt)}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>وزن خالص کل (ک‌گ)</h3>
+                        <p>${totalNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>فی خالص نهایی (ریال/ک‌گ)</h3>
+                        <p>${formatMoney(Math.round(totalNetFee))}</p>
                     </div>
                 </div>
 
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 50px; text-align: center;">ردیف</th>
-                            <th style="width: 150px;">گروه کالا</th>
+                            <th style="width: 35px;">ردیف</th>
+                            <th>گروه کالا</th>
                             <th>نام کالا / محصول</th>
-                            <th style="width: 120px; text-align: center;">جمع وزن خالص (ک‌گ)</th>
-                            <th style="width: 120px; text-align: center;">جمع وزن ناخالص (ک‌گ)</th>
-                            <th style="width: 180px; text-align: left;">جمع کل مبلغ (ریال)</th>
+                            <th>فروش ناخالص (ک‌گ / ریال)</th>
+                            <th>مرجوعی کد ۱۳ (ک‌گ / ریال)</th>
+                            <th>فروش خالص نهایی (ک‌گ / ریال)</th>
+                            <th>فی خالص نهایی (ریال)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${groupedRows.slice(0, 1000).map((row, idx) => `
-                            <tr>
-                                <td style="text-align: center;">${idx + 1}</td>
-                                <td>${row.groupName}</td>
-                                <td style="font-weight: 500;">${row.itemName}</td>
-                                <td style="text-align: center; font-family: monospace;">${row.totalNetW.toFixed(2)}</td>
-                                <td style="text-align: center; font-family: monospace;">${row.totalGrossW > 0 ? row.totalGrossW.toFixed(2) : '-'}</td>
-                                <td style="text-align: left; font-family: monospace; font-weight: bold;">${formatMoney(row.totalAmt)}</td>
-                            </tr>
-                        `).join('')}
+                        ${groupedRows.slice(0, 1000).map((row, idx) => {
+                            const netAmt = row.grossAmt - row.retAmt;
+                            const netQty = row.grossQty - row.retQty;
+                            const netFee = netQty > 0 ? (netAmt / netQty) : 0;
+                            return `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td style="font-weight: bold; color: #334155;">${row.groupName}</td>
+                                    <td style="text-align: right; font-weight: 600;">${row.itemName}</td>
+                                    <td>
+                                        ${row.grossQty.toFixed(1)} ک‌گ<br/>
+                                        <span style="font-family: monospace;">${formatMoney(row.grossAmt)}</span>
+                                    </td>
+                                    <td>
+                                        ${row.retQty > 0 ? `<span class="ret">${row.retQty.toFixed(1)} ک‌گ</span><br/><span style="font-family: monospace; color: #e11d48;">${formatMoney(row.retAmt)}</span>` : '-'}
+                                    </td>
+                                    <td>
+                                        <strong>${netQty.toFixed(1)} ک‌گ</strong><br/>
+                                        <span style="font-family: monospace; font-weight: bold; color: #15803d;">${formatMoney(netAmt)}</span>
+                                    </td>
+                                    <td style="font-family: monospace; font-weight: bold;">${formatMoney(Math.round(netFee))}</td>
+                                </tr>
+                            `;
+                        }).join('')}
                         ${groupedRows.length > 1000 ? `
                             <tr>
-                                <td colspan="6" style="text-align: center; color: #475569; font-weight: bold; background-color: #fef08a;">
+                                <td colspan="7" style="text-align: center; color: #475569; font-weight: bold; background-color: #fef08a;">
                                     نمایش ۱۰۰۰ ردیف اول از مجموع ${groupedRows.length} ردیف جهت کارایی چاپ
                                 </td>
                             </tr>
                         ` : ''}
                         <tr class="total">
                             <td colspan="3" style="text-align: left;">جمع کل بازه:</td>
-                            <td style="text-align: center; font-family: monospace;">${groupedRows.reduce((sum, r) => sum + r.totalNetW, 0).toFixed(2)}</td>
-                            <td style="text-align: center; font-family: monospace;">${groupedRows.reduce((sum, r) => sum + r.totalGrossW, 0).toFixed(2)}</td>
-                            <td style="text-align: left; font-family: monospace;">${formatMoney(groupedRows.reduce((sum, r) => sum + r.totalAmt, 0))}</td>
+                            <td>${totalGrossQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalGrossAmt)}</td>
+                            <td>${totalRetQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalRetAmt)}</td>
+                            <td>${totalNetQty.toFixed(1)} ک‌گ<br/>${formatMoney(totalNetAmt)}</td>
+                            <td>${formatMoney(Math.round(totalNetFee))}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1364,7 +1470,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 </div>
 
                 <div class="footer">
-                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - سامانه مدیریت هوشمند فاکتورها</p>
+                    <p>گزارش رسمی فروش صادره از درگاه سایان ERP - مجموع اقلام ثبت شده: ${salesData.length}</p>
                 </div>
             </body>
             </html>
