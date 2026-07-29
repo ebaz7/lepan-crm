@@ -916,11 +916,13 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     // Calculate sales overviews for Period A (Daily, Monthly, Quarterly, Yearly, and Selected Range)
     const getSalesOverviewStats = () => {
         const stats = {
-            todayAmt: 0, todayQty: 0, todayRetAmt: 0, todayRetQty: 0,
-            monthAmt: 0, monthQty: 0, monthRetAmt: 0, monthRetQty: 0,
-            quarterAmt: 0, quarterQty: 0, quarterRetAmt: 0, quarterRetQty: 0,
-            yearAmt: 0, yearQty: 0, yearRetAmt: 0, yearRetQty: 0,
-            rangeAmt: 0, rangeQty: 0, rangeRetAmt: 0, rangeRetQty: 0
+            todaySalesAmt: 0, todaySalesQty: 0, todayRetAmt: 0, todayRetQty: 0, todayNetAmt: 0, todayNetQty: 0, todayFinalPrice: 0,
+            monthSalesAmt: 0, monthSalesQty: 0, monthRetAmt: 0, monthRetQty: 0, monthNetAmt: 0, monthNetQty: 0, monthFinalPrice: 0,
+            quarterSalesAmt: 0, quarterSalesQty: 0, quarterRetAmt: 0, quarterRetQty: 0, quarterNetAmt: 0, quarterNetQty: 0, quarterFinalPrice: 0,
+            yearSalesAmt: 0, yearSalesQty: 0, yearRetAmt: 0, yearRetQty: 0, yearNetAmt: 0, yearNetQty: 0, yearFinalPrice: 0,
+            rangeSalesAmt: 0, rangeSalesQty: 0, rangeRetAmt: 0, rangeRetQty: 0, rangeNetAmt: 0, rangeNetQty: 0, rangeFinalPrice: 0,
+            // legacy getters compatibility
+            todayAmt: 0, todayQty: 0, rangeAmt: 0, rangeQty: 0, monthAmt: 0, monthQty: 0, quarterAmt: 0, quarterQty: 0, yearAmt: 0, yearQty: 0
         };
 
         const now = new Date();
@@ -929,34 +931,48 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         salesData.forEach(row => {
             const date = new Date(row.Date);
             const qty = parseFloat(row.Quantity || 0);
-            
-            // Fix: Sayan might return a unit price or pre-calculated amount. 
-            // We use parseFloat and if it's unusually small relative to qty, it might need multiplication,
-            // but we'll stick to summing up the raw amount provided by the query.
-            // If the user says it's showing less, it could be we need to sum up invoice totals from another field,
-            // or simply the query is missing some invoice types.
             const amt = parseFloat(row.Amount || 0);
+            const isReturn = row.OpCode === '13' || row.OpCode === '14';
 
-            // Add to selected range totals
-            stats.rangeAmt += amt;
-            stats.rangeQty += qty;
+            if (isReturn) {
+                stats.rangeRetAmt += amt;
+                stats.rangeRetQty += qty;
+            } else {
+                stats.rangeSalesAmt += amt;
+                stats.rangeSalesQty += qty;
+            }
             
             const jRow = jalaali.toJalaali(date.getFullYear(), date.getMonth() + 1, date.getDate());
 
             // Yearly (Current Persian Year)
             if (jRow.jy === jNow.jy) {
-                stats.yearAmt += amt;
-                stats.yearQty += qty;
+                if (isReturn) {
+                    stats.yearRetAmt += amt;
+                    stats.yearRetQty += qty;
+                } else {
+                    stats.yearSalesAmt += amt;
+                    stats.yearSalesQty += qty;
+                }
 
                 // Monthly (Current Persian Month)
                 if (jRow.jm === jNow.jm) {
-                    stats.monthAmt += amt;
-                    stats.monthQty += qty;
+                    if (isReturn) {
+                        stats.monthRetAmt += amt;
+                        stats.monthRetQty += qty;
+                    } else {
+                        stats.monthSalesAmt += amt;
+                        stats.monthSalesQty += qty;
+                    }
 
                     // Daily (Current Persian Day)
                     if (jRow.jd === jNow.jd) {
-                        stats.todayAmt += amt;
-                        stats.todayQty += qty;
+                        if (isReturn) {
+                            stats.todayRetAmt += amt;
+                            stats.todayRetQty += qty;
+                        } else {
+                            stats.todaySalesAmt += amt;
+                            stats.todaySalesQty += qty;
+                        }
                     }
                 }
 
@@ -964,11 +980,48 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 const rowQuarter = Math.ceil(jRow.jm / 3);
                 const nowQuarter = Math.ceil(jNow.jm / 3);
                 if (rowQuarter === nowQuarter) {
-                    stats.quarterAmt += amt;
-                    stats.quarterQty += qty;
+                    if (isReturn) {
+                        stats.quarterRetAmt += amt;
+                        stats.quarterRetQty += qty;
+                    } else {
+                        stats.quarterSalesAmt += amt;
+                        stats.quarterSalesQty += qty;
+                    }
                 }
             }
         });
+
+        stats.rangeNetAmt = stats.rangeSalesAmt - stats.rangeRetAmt;
+        stats.rangeNetQty = stats.rangeSalesQty - stats.rangeRetQty;
+        stats.rangeFinalPrice = stats.rangeNetQty > 0 ? (stats.rangeNetAmt / stats.rangeNetQty) : 0;
+
+        stats.todayNetAmt = stats.todaySalesAmt - stats.todayRetAmt;
+        stats.todayNetQty = stats.todaySalesQty - stats.todayRetQty;
+        stats.todayFinalPrice = stats.todayNetQty > 0 ? (stats.todayNetAmt / stats.todayNetQty) : 0;
+
+        stats.monthNetAmt = stats.monthSalesAmt - stats.monthRetAmt;
+        stats.monthNetQty = stats.monthSalesQty - stats.monthRetQty;
+        stats.monthFinalPrice = stats.monthNetQty > 0 ? (stats.monthNetAmt / stats.monthNetQty) : 0;
+
+        stats.quarterNetAmt = stats.quarterSalesAmt - stats.quarterRetAmt;
+        stats.quarterNetQty = stats.quarterSalesQty - stats.quarterRetQty;
+        stats.quarterFinalPrice = stats.quarterNetQty > 0 ? (stats.quarterNetAmt / stats.quarterNetQty) : 0;
+
+        stats.yearNetAmt = stats.yearSalesAmt - stats.yearRetAmt;
+        stats.yearNetQty = stats.yearSalesQty - stats.yearRetQty;
+        stats.yearFinalPrice = stats.yearNetQty > 0 ? (stats.yearNetAmt / stats.yearNetQty) : 0;
+
+        // Legacy compatibility shortcuts
+        stats.todayAmt = stats.todayNetAmt;
+        stats.todayQty = stats.todayNetQty;
+        stats.rangeAmt = stats.rangeNetAmt;
+        stats.rangeQty = stats.rangeNetQty;
+        stats.monthAmt = stats.monthNetAmt;
+        stats.monthQty = stats.monthNetQty;
+        stats.quarterAmt = stats.quarterNetAmt;
+        stats.quarterQty = stats.quarterNetQty;
+        stats.yearAmt = stats.yearNetAmt;
+        stats.yearQty = stats.yearNetQty;
 
         return stats;
     };
@@ -2492,43 +2545,196 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         )}
 
                         {/* Top-level overviews for Period A */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                            <div className="bg-blue-50/80 rounded-xl p-4 border border-blue-200 shadow-sm col-span-2 md:col-span-1">
-                                <div className="text-blue-700 font-bold text-[10px]">فروش بازه انتخاب‌شده</div>
-                                <div className="text-lg font-black text-blue-900 mt-2 font-mono">
-                                    {formatMoney(stats.rangeAmt)} <span className="text-[10px] font-bold">ریال</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50/70 rounded-xl p-4 border border-blue-200 shadow-sm col-span-1 sm:col-span-2 md:col-span-1">
+                                <div className="text-blue-800 font-bold text-[11px] flex items-center justify-between">
+                                    <span>فروش خالص بازه</span>
+                                    <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-mono">فی: {formatMoney(Math.round(stats.rangeFinalPrice))}</span>
                                 </div>
-                                <div className="text-[10px] text-blue-600 font-semibold mt-1">وزن: {stats.rangeQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم</div>
+                                <div className="text-lg font-black text-blue-950 mt-1 font-mono">
+                                    {formatMoney(stats.rangeNetAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-blue-700 font-semibold mt-1">
+                                    وزن خالص: {stats.rangeNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+                                </div>
+                                {stats.rangeRetAmt > 0 && (
+                                    <div className="text-[9px] text-rose-600 font-medium mt-0.5">
+                                        مرجوعی کد ۱۳: {formatMoney(stats.rangeRetAmt)} ریال ({stats.rangeRetQty.toFixed(1)} ک‌گ)
+                                    </div>
+                                )}
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امروز</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.todayAmt)} <span className="text-[10px] font-bold">ریال</span>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
+                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
+                                    <span>فروش خالص امروز</span>
+                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.todayFinalPrice))}</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.todayQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
+                                    {formatMoney(stats.todayNetAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                    وزن خالص: {stats.todayNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+                                </div>
+                                {stats.todayRetAmt > 0 && (
+                                    <div className="text-[9px] text-rose-600 font-medium mt-0.5">
+                                        مرجوعی کد ۱۳: {formatMoney(stats.todayRetAmt)} ریال
+                                    </div>
+                                )}
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش این ماه</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.monthAmt)} <span className="text-[10px] font-bold">ریال</span>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
+                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
+                                    <span>فروش خالص این ماه</span>
+                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.monthFinalPrice))}</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.monthQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
+                                    {formatMoney(stats.monthNetAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                    وزن خالص: {stats.monthNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+                                </div>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش فصل جاری</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.quarterAmt)} <span className="text-[10px] font-bold">ریال</span>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
+                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
+                                    <span>فروش خالص فصل جاری</span>
+                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.quarterFinalPrice))}</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.quarterQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
+                                    {formatMoney(stats.quarterNetAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                    وزن خالص: {stats.quarterNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+                                </div>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <div className="text-slate-500 font-semibold text-[10px]">فروش امسال</div>
-                                <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                                    {formatMoney(stats.yearAmt)} <span className="text-[10px] font-bold">ریال</span>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:border-slate-300 transition-colors">
+                                <div className="text-slate-600 font-bold text-[11px] flex items-center justify-between">
+                                    <span>فروش خالص امسال</span>
+                                    <span className="text-[9px] text-slate-500 font-mono">فی: {formatMoney(Math.round(stats.yearFinalPrice))}</span>
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-1 font-medium">وزن: {stats.yearQty.toFixed(1)} کیلوگرم</div>
+                                <div className="text-lg font-black text-slate-900 mt-1 font-mono">
+                                    {formatMoney(stats.yearNetAmt)} <span className="text-[10px] font-bold">ریال</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                    وزن خالص: {stats.yearNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+                                </div>
                             </div>
                         </div>
+
+                        {/* Product Group Breakdown with Return Code 13 & Final Unit Price Table */}
+                        {(() => {
+                            const groupMap = new Map<string, {
+                                groupName: string;
+                                itemName: string;
+                                salesQty: number;
+                                salesAmt: number;
+                                returnQty: number;
+                                returnAmt: number;
+                            }>();
+
+                            displayedInvoices.forEach(row => {
+                                const key = `${row.GroupName || 'سایر'}_${row.ItemName || 'کالا'}`;
+                                const qty = parseFloat(row.Quantity || 0);
+                                const amt = parseFloat(row.Amount || 0);
+                                const isReturn = row.OpCode === '13' || row.OpCode === '14';
+
+                                if (!groupMap.has(key)) {
+                                    groupMap.set(key, {
+                                        groupName: row.GroupName || 'سایر گروه‌ها',
+                                        itemName: row.ItemName || 'کالای بدون نام',
+                                        salesQty: 0,
+                                        salesAmt: 0,
+                                        returnQty: 0,
+                                        returnAmt: 0
+                                    });
+                                }
+
+                                const itemData = groupMap.get(key)!;
+                                if (isReturn) {
+                                    itemData.returnQty += qty;
+                                    itemData.returnAmt += amt;
+                                } else {
+                                    itemData.salesQty += qty;
+                                    itemData.salesAmt += amt;
+                                }
+                            });
+
+                            const groupList = Array.from(groupMap.values());
+                            if (groupList.length === 0) return null;
+
+                            let totSalesQty = 0, totSalesAmt = 0, totRetQty = 0, totRetAmt = 0;
+                            groupList.forEach(g => {
+                                totSalesQty += g.salesQty;
+                                totSalesAmt += g.salesAmt;
+                                totRetQty += g.returnQty;
+                                totRetAmt += g.returnAmt;
+                            });
+
+                            const totNetQty = totSalesQty - totRetQty;
+                            const totNetAmt = totSalesAmt - totRetAmt;
+                            const totFinalPrice = totNetQty > 0 ? (totNetAmt / totNetQty) : 0;
+
+                            return (
+                                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-2">
+                                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-sm">جدول خلاصه عملکرد: گروه کالا، مرجوعی (کد ۱۳) و فی نهایی</span>
+                                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium">پایگاه داده سایان ERP</span>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-right text-xs">
+                                            <thead>
+                                                <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                                                    <th className="p-3 w-12 text-center">ردیف</th>
+                                                    <th className="p-3">گروه / نام کالا</th>
+                                                    <th className="p-3 text-center">فروش ناخالص (ک‌گ)</th>
+                                                    <th className="p-3 text-left">فروش ناخالص (ریال)</th>
+                                                    <th className="p-3 text-center text-rose-700 bg-rose-50/60">مرجوعی کد ۱۳ (ک‌گ)</th>
+                                                    <th className="p-3 text-left text-rose-700 bg-rose-50/60">مبلغ مرجوعی (ریال)</th>
+                                                    <th className="p-3 text-center font-black text-blue-900 bg-blue-50/60">وزن خالص (ک‌گ)</th>
+                                                    <th className="p-3 text-left font-black text-blue-900 bg-blue-50/60">فروش خالص (ریال)</th>
+                                                    <th className="p-3 text-left font-black text-emerald-900 bg-emerald-50/60">فی نهایی (ریال / ک‌گ)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {groupList.map((g, idx) => {
+                                                    const netQty = g.salesQty - g.returnQty;
+                                                    const netAmt = g.salesAmt - g.returnAmt;
+                                                    const finalPrice = netQty > 0 ? (netAmt / netQty) : 0;
+
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                                                            <td className="p-3 font-semibold text-slate-800">
+                                                                <div className="text-[10px] text-slate-500 font-normal">{g.groupName}</div>
+                                                                <div className="font-bold text-slate-900">{g.itemName}</div>
+                                                            </td>
+                                                            <td className="p-3 text-center font-mono">{g.salesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono">{formatMoney(g.salesAmt)}</td>
+                                                            <td className="p-3 text-center font-mono text-rose-600 bg-rose-50/30">{g.returnQty > 0 ? g.returnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '-'}</td>
+                                                            <td className="p-3 text-left font-mono text-rose-600 bg-rose-50/30">{g.returnAmt > 0 ? formatMoney(g.returnAmt) : '-'}</td>
+                                                            <td className="p-3 text-center font-mono font-bold text-blue-900 bg-blue-50/30">{netQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-blue-900 bg-blue-50/30">{formatMoney(netAmt)}</td>
+                                                            <td className="p-3 text-left font-mono font-black text-emerald-800 bg-emerald-50/30">{formatMoney(Math.round(finalPrice))}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
+                                                    <td colSpan={2} className="p-3 text-right">جمع کل عملکرد:</td>
+                                                    <td className="p-3 text-center font-mono">{totSalesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono">{formatMoney(totSalesAmt)}</td>
+                                                    <td className="p-3 text-center font-mono text-rose-300">{totRetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono text-rose-300">{formatMoney(totRetAmt)}</td>
+                                                    <td className="p-3 text-center font-mono font-black text-blue-300">{totNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                    <td className="p-3 text-left font-mono font-black text-blue-300">{formatMoney(totNetAmt)}</td>
+                                                    <td className="p-3 text-left font-mono font-black text-emerald-400">{formatMoney(Math.round(totFinalPrice))}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Today's Invoices Table */}
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-6 mb-6">

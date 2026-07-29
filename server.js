@@ -377,26 +377,66 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
 
     const salesTargets = targetsOverride ? [...targetsOverride] : [];
     if (!targetsOverride) {
-        const targetKeys = [
-            'dailySalesTelegramGroupId', 'dailySalesBaleGroupId', 'dailySalesWhatsappGroupId',
-            'botAccountingGroupIdTele', 'botAccountingGroupIdBale', 'botAccountingGroupIdWhatsApp',
-            'botAccountingGroupId', 'reportsGroupId', 'telegramReportsGroupId', 'telegramReportsGroupId2',
-            'baleReportsGroupId', 'baleReportsGroupId2', 'whatsappReportsGroupId', 'whatsappReportsGroupId2',
-            'telegramChatId', 'baleChatId', 'botDailySalesGroupId', 'botDailySalesGroupIdTele',
-            'botDailySalesGroupIdBale', 'botDailySalesGroupIdWhatsApp', 'dailySalesGroupId', 'salesGroupId',
-            'telegramGroupId', 'baleGroupId', 'whatsappGroupId'
+        const targetConfigList = [
+            { key: 'dailySalesTelegramGroupId', plat: 'telegram' },
+            { key: 'dailySalesBaleGroupId', plat: 'bale' },
+            { key: 'dailySalesWhatsappGroupId', plat: 'whatsapp' },
+            { key: 'botAccountingGroupIdTele', plat: 'telegram' },
+            { key: 'botAccountingGroupIdBale', plat: 'bale' },
+            { key: 'botAccountingGroupIdWhatsApp', plat: 'whatsapp' },
+            { key: 'botAccountingGroupId', plat: 'any' },
+            { key: 'reportsGroupId', plat: 'any' },
+            { key: 'telegramReportsGroupId', plat: 'telegram' },
+            { key: 'telegramReportsGroupId2', plat: 'telegram' },
+            { key: 'baleReportsGroupId', plat: 'bale' },
+            { key: 'baleReportsGroupId2', plat: 'bale' },
+            { key: 'whatsappReportsGroupId', plat: 'whatsapp' },
+            { key: 'whatsappReportsGroupId2', plat: 'whatsapp' },
+            { key: 'telegramChatId', plat: 'telegram' },
+            { key: 'baleChatId', plat: 'bale' },
+            { key: 'botDailySalesGroupId', plat: 'any' },
+            { key: 'botDailySalesGroupIdTele', plat: 'telegram' },
+            { key: 'botDailySalesGroupIdBale', plat: 'bale' },
+            { key: 'botDailySalesGroupIdWhatsApp', plat: 'whatsapp' },
+            { key: 'dailySalesGroupId', plat: 'any' },
+            { key: 'salesGroupId', plat: 'any' },
+            { key: 'telegramGroupId', plat: 'telegram' },
+            { key: 'baleGroupId', plat: 'bale' },
+            { key: 'whatsappGroupId', plat: 'whatsapp' }
         ];
-        targetKeys.forEach(key => {
-            if (settings[key]) {
-                const kLower = key.toLowerCase();
-                const platform = kLower.includes('bale') ? 'bale' : (kLower.includes('whatsapp') ? 'whatsapp' : 'telegram');
-                salesTargets.push({ platform, id: settings[key] });
+
+        targetConfigList.forEach(({ key, plat }) => {
+            const val = settings[key];
+            if (val) {
+                if (plat === 'telegram' || (plat === 'any' && settings.telegramBotToken)) {
+                    salesTargets.push({ platform: 'telegram', id: val });
+                }
+                if (plat === 'bale' || (plat === 'any' && settings.baleBotToken)) {
+                    salesTargets.push({ platform: 'bale', id: val });
+                }
+                if (plat === 'whatsapp') {
+                    salesTargets.push({ platform: 'whatsapp', id: val });
+                }
+                if (plat === 'any' && !settings.telegramBotToken && !settings.baleBotToken) {
+                    salesTargets.push({ platform: 'telegram', id: val });
+                    salesTargets.push({ platform: 'bale', id: val });
+                }
             }
         });
 
         if (db.groups && Array.isArray(db.groups)) {
             db.groups.forEach(g => {
-                if (g.chatId) salesTargets.push({ platform: g.platform || 'telegram', id: g.chatId });
+                if (g.chatId) {
+                    if (g.platform) {
+                        salesTargets.push({ platform: g.platform, id: g.chatId });
+                    } else {
+                        if (settings.telegramBotToken) salesTargets.push({ platform: 'telegram', id: g.chatId });
+                        if (settings.baleBotToken) salesTargets.push({ platform: 'bale', id: g.chatId });
+                        if (!settings.telegramBotToken && !settings.baleBotToken) {
+                            salesTargets.push({ platform: 'telegram', id: g.chatId });
+                        }
+                    }
+                }
             });
         }
     }
@@ -420,6 +460,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     // Fetch sales and returns data from Sayan ERP
     const shamsiClean = shamsiDate.replace(/\//g, '');
     const shamsiDash = shamsiDate.replace(/\//g, '-');
+    const gregSlash = gregDate.replace(/-/g, '/');
     
     const sql = `
         SELECT 
@@ -455,6 +496,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
           )
           AND (
             t10.Field_008 LIKE '${gregDate}%'
+            OR t10.Field_008 LIKE '${gregSlash}%'
             ${shamsiDate ? `OR t10.Field_008 LIKE '${shamsiDate}%'` : ''}
             ${shamsiClean ? `OR t10.Field_008 LIKE '${shamsiClean}%'` : ''}
             ${shamsiDash ? `OR t10.Field_008 LIKE '${shamsiDash}%'` : ''}
@@ -466,10 +508,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
 
     const salesRows = await executeSayanQuery(db, sql);
     
-    // Always create a PDF even if empty, or just return empty message. But wait, if salesRows is empty it's fine.
     if (salesRows.length > 0) {
-        const title = `گزارش رسمی فروش روزانه سایان - مورخ ${shamsiDate} (${labelSuffix})`;
-        const columns = ['ردیف', 'گروه / کالا', 'فروش (ک‌گ / ریال)', 'مرجوعی (ک‌گ / ریال)', 'خالص (ک‌گ / ریال)', 'فی نهایی (ریال)'];
+        const title = `گزارش رسمی فروش روزانه و مرجوعی سایان - مورخ ${shamsiDate} (${labelSuffix})`;
+        const columns = ['ردیف', 'گروه / نام کالا', 'فروش ناخالص (ک‌گ / ریال)', 'مرجوعی کد ۱۳ (ک‌گ / ریال)', 'خالص (ک‌گ / ریال)', 'فی نهایی (ریال)'];
         
         const groupedMap = new Map();
         let totalSalesQty = 0;
@@ -481,7 +522,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
             const amt = parseFloat(inv.Amount || 0);
-            const isReturn = inv.OpCode === '13';
+            const isReturn = inv.OpCode === '13' || inv.OpCode === '14';
             
             if (isReturn) {
                 totalReturnQty += qty;
@@ -521,9 +562,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             return [
                 (idx + 1).toLocaleString('fa-IR'),
                 `${row.groupName} - ${row.itemName}`,
-                `${row.salesQty.toLocaleString('fa-IR')} / ${row.salesAmt.toLocaleString('fa-IR')}`,
-                `${row.returnQty.toLocaleString('fa-IR')} / ${row.returnAmt.toLocaleString('fa-IR')}`,
-                `${netQty.toLocaleString('fa-IR')} / ${netAmt.toLocaleString('fa-IR')}`,
+                `${row.salesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ک‌گ / ${Math.round(row.salesAmt).toLocaleString('fa-IR')} ریال`,
+                `${row.returnQty > 0 ? row.returnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0'} ک‌گ / ${Math.round(row.returnAmt).toLocaleString('fa-IR')} ریال`,
+                `${netQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ک‌گ / ${Math.round(netAmt).toLocaleString('fa-IR')} ریال`,
                 Math.round(finalPrice).toLocaleString('fa-IR')
             ];
         });
@@ -535,9 +576,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         tableRows.push([
             'جمع کل',
             '-',
-            `${totalSalesQty.toLocaleString('fa-IR')} / ${totalSalesAmt.toLocaleString('fa-IR')}`,
-            `${totalReturnQty.toLocaleString('fa-IR')} / ${totalReturnAmt.toLocaleString('fa-IR')}`,
-            `${grandNetQty.toLocaleString('fa-IR')} / ${grandNetAmt.toLocaleString('fa-IR')}`,
+            `${totalSalesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ک‌گ / ${Math.round(totalSalesAmt).toLocaleString('fa-IR')} ریال`,
+            `${totalReturnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ک‌گ / ${Math.round(totalReturnAmt).toLocaleString('fa-IR')} ریال`,
+            `${grandNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ک‌گ / ${Math.round(grandNetAmt).toLocaleString('fa-IR')} ریال`,
             Math.round(grandFinalPrice).toLocaleString('fa-IR')
         ]);
         
@@ -545,12 +586,16 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         
         const filename = `Sayan_Daily_Sales_${gregDate}_${labelSuffix === 'دیروز' ? 'Yesterday' : 'Today'}.pdf`;
         
-        const caption = `📊 *گزارش فروش روزانه (${labelSuffix} - سایان ERP)*
-📅 *تاریخ:* ${shamsiDate}
-🧾 تعداد اقلام: ${groupedRows.length}
-✅ مجموع مقدار خالص: ${grandNetQty.toLocaleString('fa-IR')} کیلوگرم
-💵 فروش خالص: ${grandNetAmt.toLocaleString('fa-IR')} ریال
-➖ مرجوعی: ${totalReturnAmt.toLocaleString('fa-IR')} ریال`;
+        const caption = `📊 *گزارش فروش و مرجوعی روزانه سایان ERP*
+📅 *تاریخ:* ${shamsiDate} (${labelSuffix})
+🧾 *تعداد اقلام:* ${groupedRows.length} مورد
+📦 *وزن فروش ناخالص:* ${totalSalesQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+💵 *مبلغ فروش ناخالص:* ${Math.round(totalSalesAmt).toLocaleString('fa-IR')} ریال
+🔄 *وزن مرجوعی (کد ۱۳):* ${totalReturnQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+❌ *مبلغ مرجوعی:* ${Math.round(totalReturnAmt).toLocaleString('fa-IR')} ریال
+✅ *وزن خالص کل:* ${grandNetQty.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+💰 *فروش خالص کل:* ${Math.round(grandNetAmt).toLocaleString('fa-IR')} ریال
+🏷️ *فی نهایی میانگین:* ${Math.round(grandFinalPrice).toLocaleString('fa-IR')} ریال/کیلوگرم`;
 
         let successfulSends = 0;
         let lastErr = null;
@@ -583,7 +628,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             throw new Error(`ارسال گزارش فروش ناموفق بود: ${lastErr || 'خطا در اتصال به پیام‌رسان‌ها'}`);
         }
 
-        return { count: salesRows.length, totalSalesQty, totalSalesAmt, sent: true, successfulSends };
+        return { count: salesRows.length, totalSalesQty, totalSalesAmt, grandNetAmt, grandNetQty, grandFinalPrice, sent: true, successfulSends };
 
     } else {
         const emptyMsg = `⚠️ هیچ فاکتور فروشی برای ${labelSuffix} (${shamsiDate}) در سرور سایان ثبت نشده است.`;
