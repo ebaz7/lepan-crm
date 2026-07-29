@@ -80,7 +80,7 @@ webpush.setVapidDetails(
 );
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 app.use(cors()); 
 // Maximum compression for speed
@@ -371,27 +371,28 @@ const buildProductionCaption = (dateStr, totals, waste) => {
 // Helper to generate and send daily sales report for a specific Date
 const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', targetsOverride = null) => {
     const settings = db.settings || {};
-    const shamsiDate = utils.toShamsiFull(dateObj.toISOString()).split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); // Normalize to English digits
-    const gregDate = utils.getTehranDateString(dateObj);
+    const shamsiFull = utils.toShamsiFull(dateObj.toISOString());
+    const shamsiDate = shamsiFull ? shamsiFull.split(' ')[0].replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)) : ''; // e.g. "1404/05/07"
+    const gregDate = utils.getTehranDateString(dateObj); // e.g. "2026-07-29"
 
     const salesTargets = targetsOverride ? [...targetsOverride] : [];
     if (!targetsOverride) {
-        if (settings.dailySalesTelegramGroupId) salesTargets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
-        if (settings.dailySalesBaleGroupId) salesTargets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
-        if (settings.dailySalesWhatsappGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.dailySalesWhatsappGroupId });
-        if (settings.botAccountingGroupIdTele) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
-        if (settings.botAccountingGroupIdBale) salesTargets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
-        if (settings.botAccountingGroupIdWhatsApp) salesTargets.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
-        if (settings.botAccountingGroupId) salesTargets.push({ platform: 'telegram', id: settings.botAccountingGroupId });
-        if (settings.reportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.reportsGroupId });
-        if (settings.telegramReportsGroupId) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId });
-        if (settings.telegramReportsGroupId2) salesTargets.push({ platform: 'telegram', id: settings.telegramReportsGroupId2 });
-        if (settings.baleReportsGroupId) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId });
-        if (settings.baleReportsGroupId2) salesTargets.push({ platform: 'bale', id: settings.baleReportsGroupId2 });
-        if (settings.whatsappReportsGroupId) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId });
-        if (settings.whatsappReportsGroupId2) salesTargets.push({ platform: 'whatsapp', id: settings.whatsappReportsGroupId2 });
-        if (settings.telegramChatId) salesTargets.push({ platform: 'telegram', id: settings.telegramChatId });
-        if (settings.baleChatId) salesTargets.push({ platform: 'bale', id: settings.baleChatId });
+        const targetKeys = [
+            'dailySalesTelegramGroupId', 'dailySalesBaleGroupId', 'dailySalesWhatsappGroupId',
+            'botAccountingGroupIdTele', 'botAccountingGroupIdBale', 'botAccountingGroupIdWhatsApp',
+            'botAccountingGroupId', 'reportsGroupId', 'telegramReportsGroupId', 'telegramReportsGroupId2',
+            'baleReportsGroupId', 'baleReportsGroupId2', 'whatsappReportsGroupId', 'whatsappReportsGroupId2',
+            'telegramChatId', 'baleChatId', 'botDailySalesGroupId', 'botDailySalesGroupIdTele',
+            'botDailySalesGroupIdBale', 'botDailySalesGroupIdWhatsApp', 'dailySalesGroupId', 'salesGroupId',
+            'telegramGroupId', 'baleGroupId', 'whatsappGroupId'
+        ];
+        targetKeys.forEach(key => {
+            if (settings[key]) {
+                const kLower = key.toLowerCase();
+                const platform = kLower.includes('bale') ? 'bale' : (kLower.includes('whatsapp') ? 'whatsapp' : 'telegram');
+                salesTargets.push({ platform, id: settings[key] });
+            }
+        });
 
         if (db.groups && Array.isArray(db.groups)) {
             db.groups.forEach(g => {
@@ -417,6 +418,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
     }
 
     // Fetch sales and returns data from Sayan ERP
+    const shamsiClean = shamsiDate.replace(/\//g, '');
+    const shamsiDash = shamsiDate.replace(/\//g, '-');
+    
     const sql = `
         SELECT 
             t10.Field_005 as DocId,
@@ -438,18 +442,25 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         LEFT JOIN (
             SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
             FROM IND_TBL_021 t21_sub
-            LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
-            LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
-            LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
+            LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
+            LEFT JOIN IND_TBL_002 t02_parent ON RTRIM(LTRIM(t02_sub.Field_009)) = RTRIM(LTRIM(t02_parent.Field_008))
+            LEFT JOIN IND_TBL_002 t02_grandparent ON RTRIM(LTRIM(t02_parent.Field_009)) = RTRIM(LTRIM(t02_grandparent.Field_008))
             GROUP BY t21_sub.Field_004
-        ) t_group ON t11.Field_005 = t_group.ItemCode
-        LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+        ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
+        LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
         WHERE (
-            (t10.Field_009 IN ('3', '12', '23') AND t11.Field_036 = t10.Field_009 AND t11.Field_007 > 0)
+            (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
             OR 
-            (t10.Field_009 = '13' AND t11.Field_036 IN ('3', '12', '23', '13'))
+            (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
           )
-          AND (t10.Field_008 = '${gregDate}' OR t10.Field_008 LIKE '${gregDate}%' OR t10.Field_008 BETWEEN '${gregDate}T00:00:00.000Z' AND '${gregDate}T23:59:59.999Z')
+          AND (
+            t10.Field_008 LIKE '${gregDate}%'
+            ${shamsiDate ? `OR t10.Field_008 LIKE '${shamsiDate}%'` : ''}
+            ${shamsiClean ? `OR t10.Field_008 LIKE '${shamsiClean}%'` : ''}
+            ${shamsiDash ? `OR t10.Field_008 LIKE '${shamsiDash}%'` : ''}
+            OR t10.Field_008 BETWEEN '${gregDate}T00:00:00.000Z' AND '${gregDate}T23:59:59.999Z'
+            OR t10.Field_008 BETWEEN '${gregDate} 00:00:00' AND '${gregDate} 23:59:59'
+          )
         ORDER BY t10.Field_008 DESC
     `;
 

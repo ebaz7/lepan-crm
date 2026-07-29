@@ -819,7 +819,6 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
                     t10.Field_009 as OpCode,
-                    t10.Field_009 as OpCode,
                     t11.Field_005 as ItemCode,
                     t22.Field_004 as ItemName,
                     t11.Field_006 as Quantity,
@@ -830,20 +829,20 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 FROM STR_TBL_010 t10
                 INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                           AND t11.Field_003 = t10.Field_004
-                LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                 LEFT JOIN (
                     SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
-                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
-                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
-                    LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
+                    LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
+                    LEFT JOIN IND_TBL_002 t02_parent ON RTRIM(LTRIM(t02_sub.Field_009)) = RTRIM(LTRIM(t02_parent.Field_008))
+                    LEFT JOIN IND_TBL_002 t02_grandparent ON RTRIM(LTRIM(t02_parent.Field_009)) = RTRIM(LTRIM(t02_grandparent.Field_008))
                     GROUP BY t21_sub.Field_004
-                ) t_group ON t11.Field_005 = t_group.ItemCode
-                LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
+                LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                 WHERE (
-                    (t10.Field_009 IN ('3', '12', '23') AND t11.Field_036 = t10.Field_009 AND t11.Field_007 > 0)
+                    (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
                     OR
-                    (t10.Field_009 = '13' AND t11.Field_036 IN ('3', '12', '23', '13'))
+                    (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
                   )
                   ${dateFilter}
                 ORDER BY t10.Field_008 DESC
@@ -882,20 +881,20 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     FROM STR_TBL_010 t10
                     INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                               AND t11.Field_003 = t10.Field_004
-                    LEFT JOIN IND_TBL_022 t22 ON t11.Field_005 = t22.Field_005
+                    LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN (
                         SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
-                    FROM IND_TBL_021 t21_sub
-                    LEFT JOIN IND_TBL_002 t02_sub ON t21_sub.Field_003 = t02_sub.Field_008
-                    LEFT JOIN IND_TBL_002 t02_parent ON t02_sub.Field_009 = t02_parent.Field_008
-                    LEFT JOIN IND_TBL_002 t02_grandparent ON t02_parent.Field_009 = t02_grandparent.Field_008
-                    GROUP BY t21_sub.Field_004
-                    ) t_group ON t11.Field_005 = t_group.ItemCode
-                    LEFT JOIN ACT_TBL_007 t07 ON t10.Field_010 = t07.Field_005 AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
+                        FROM IND_TBL_021 t21_sub
+                        LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
+                        LEFT JOIN IND_TBL_002 t02_parent ON RTRIM(LTRIM(t02_sub.Field_009)) = RTRIM(LTRIM(t02_parent.Field_008))
+                        LEFT JOIN IND_TBL_002 t02_grandparent ON RTRIM(LTRIM(t02_parent.Field_009)) = RTRIM(LTRIM(t02_grandparent.Field_008))
+                        GROUP BY t21_sub.Field_004
+                    ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
+                    LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                     WHERE (
-                        (t10.Field_009 IN ('3', '12', '23') AND t11.Field_036 = t10.Field_009 AND t11.Field_007 > 0)
+                        (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
                         OR
-                        (t10.Field_009 = '13' AND t11.Field_036 IN ('3', '12', '23', '13'))
+                        (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
                       )
                       ${dateFilterB}
                     ORDER BY t10.Field_008 DESC
@@ -975,14 +974,26 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     };
 
     const getTodayInvoices = () => {
-        const targetDate = dateTo || (() => {
+        const todayJalali = (() => {
             const today = new Date();
             const iranToday = new Date(today.getTime() + (3.5 * 60 * 60 * 1000));
             const jToday = jalaali.toJalaali(iranToday.getUTCFullYear(), iranToday.getUTCMonth() + 1, iranToday.getUTCDate());
             return `${jToday.jy}/${String(jToday.jm).padStart(2, '0')}/${String(jToday.jd).padStart(2, '0')}`;
         })();
-        
-        return salesData.filter(row => formatDateToJalali(row.Date) === targetDate);
+        const targetDate = dateTo || todayJalali;
+
+        const normalizeJalali = (str: string) => {
+            if (!str) return '';
+            const c = str.trim()
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+            const formatted = formatDateToJalali(c);
+            const parts = formatted.split('/');
+            return parts.length === 3 ? `${parts[0]}/${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}` : formatted;
+        };
+
+        const targetNorm = normalizeJalali(targetDate);
+        return salesData.filter(row => normalizeJalali(row.Date) === targetNorm);
     };
 
     const handleSendSalesBotReport = async (targetDate: 'today' | 'yesterday') => {
