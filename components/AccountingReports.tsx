@@ -88,6 +88,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
     const [salesData, setSalesData] = useState<any[]>([]);
     const [salesViewMode, setSalesViewMode] = useState<'today' | 'range'>('today');
     const [compareMode, setCompareMode] = useState(false);
+    const [compareGroupBy, setCompareGroupBy] = useState<'group' | 'item'>('group');
     const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
     // Period B for sales comparison
     const [salesDateFromB, setSalesDateFromB] = useState('');
@@ -1380,61 +1381,295 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
         }
     };
 
-    // Prepare chart comparison data grouped by Product Group
+    // Preset generator for quick Period B selection
+    const applyQuickComparePreset = (preset: 'prev_year' | 'prev_month' | 'prev_quarter') => {
+        if (!dateFrom || !dateTo) return;
+        try {
+            const partsFrom = dateFrom.split('/');
+            const partsTo = dateTo.split('/');
+            if (partsFrom.length === 3 && partsTo.length === 3) {
+                const yFrom = parseInt(partsFrom[0], 10);
+                const mFrom = parseInt(partsFrom[1], 10);
+                const dFrom = parseInt(partsFrom[2], 10);
+                const yTo = parseInt(partsTo[0], 10);
+                const mTo = parseInt(partsTo[1], 10);
+                const dTo = parseInt(partsTo[2], 10);
+
+                if (preset === 'prev_year') {
+                    const bFrom = `${yFrom - 1}/${String(mFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+                    const bTo = `${yTo - 1}/${String(mTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+                    setSalesDateFromB(bFrom);
+                    setSalesDateToB(bTo);
+                    toast.success(`بازه دوم به همسان سال قبل (${bFrom} تا ${bTo}) تغییر یافت.`);
+                } else if (preset === 'prev_month') {
+                    let prevMFrom = mFrom - 1;
+                    let prevYFrom = yFrom;
+                    if (prevMFrom < 1) { prevMFrom = 12; prevYFrom--; }
+                    
+                    let prevMTo = mTo - 1;
+                    let prevYTo = yTo;
+                    if (prevMTo < 1) { prevMTo = 12; prevYTo--; }
+
+                    const bFrom = `${prevYFrom}/${String(prevMFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+                    const bTo = `${prevYTo}/${String(prevMTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+                    setSalesDateFromB(bFrom);
+                    setSalesDateToB(bTo);
+                    toast.success(`بازه دوم به ماه قبل (${bFrom} تا ${bTo}) تغییر یافت.`);
+                } else if (preset === 'prev_quarter') {
+                    let prevMFrom = mFrom - 3;
+                    let prevYFrom = yFrom;
+                    if (prevMFrom < 1) { prevMFrom += 12; prevYFrom--; }
+
+                    let prevMTo = mTo - 3;
+                    let prevYTo = yTo;
+                    if (prevMTo < 1) { prevMTo += 12; prevYTo--; }
+
+                    const bFrom = `${prevYFrom}/${String(prevMFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+                    const bTo = `${prevYTo}/${String(prevMTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+                    setSalesDateFromB(bFrom);
+                    setSalesDateToB(bTo);
+                    toast.success(`بازه دوم به فصل قبل (${bFrom} تا ${bTo}) تغییر یافت.`);
+                }
+            }
+        } catch {
+            toast.error('امکان محاسبه بازه خودکار وجود ندارد.');
+        }
+    };
+
+    // Print Comparative Sales PDF
+    const handlePrintComparativeSales = () => {
+        const title = `گزارش تحلیلی و مقایسه‌ای فروش سایان (${dateFrom} تا ${dateTo} در مقایسه با ${salesDateFromB} تا ${salesDateToB})`;
+        const data = getComparisonChartData();
+
+        let sumNetWA = 0, sumNetWB = 0, sumNetAmtA = 0, sumNetAmtB = 0, sumRetWA = 0, sumRetWB = 0;
+        data.forEach(r => {
+            sumNetWA += r.netWeightA || 0;
+            sumNetWB += r.netWeightB || 0;
+            sumNetAmtA += r.netAmountA || 0;
+            sumNetAmtB += r.netAmountB || 0;
+            sumRetWA += r.retWeightA || 0;
+            sumRetWB += r.retWeightB || 0;
+        });
+
+        const totalWeightDiff = sumNetWB ? ((sumNetWA - sumNetWB) / sumNetWB) * 100 : 0;
+        const totalAmountDiff = sumNetAmtB ? ((sumNetAmtA - sumNetAmtB) / sumNetAmtB) * 100 : 0;
+        const avgFeeA = sumNetWA ? (sumNetAmtA / sumNetWA) : 0;
+        const avgFeeB = sumNetWB ? (sumNetAmtB / sumNetWB) : 0;
+        const totalFeeDiff = avgFeeB ? ((avgFeeA - avgFeeB) / avgFeeB) * 100 : 0;
+
+        const docHtml = `
+            <html dir="rtl" lang="fa">
+            <head>
+                <meta charset="utf-8">
+                <title>${title}</title>
+                <style>
+                    body { font-family: Tahoma, 'B Nazanin', Arial, sans-serif; margin: 25px; direction: rtl; color: #1e293b; font-size: 11px; }
+                    .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 15px; margin-bottom: 20px; }
+                    .header h1 { margin: 0; font-size: 18px; color: #1e3a8a; }
+                    .header p { margin: 5px 0 0 0; color: #64748b; font-size: 12px; }
+                    .info-box { display: flex; justify-content: space-between; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; }
+                    .info-box div { line-height: 1.6; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+                    th { background-color: #0f172a; color: white; padding: 10px 6px; text-align: center; border: 1px solid #334155; font-weight: bold; }
+                    td { border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; }
+                    tr:nth-child(even) { background-color: #f8fafc; }
+                    .total { background-color: #1e293b !important; color: white !important; font-weight: bold; }
+                    .total td { border-color: #475569; color: white; }
+                    .pos { color: #16a34a; font-weight: bold; }
+                    .neg { color: #dc2626; font-weight: bold; }
+                    .ret { color: #e11d48; font-size: 9px; }
+                    .signatures { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; }
+                    .signatures div { text-align: center; width: 30%; }
+                    .signature-box { height: 60px; border-bottom: 1px dashed #94a3b8; margin-top: 10px; }
+                    .footer { text-align: center; margin-top: 30px; font-size: 9px; color: #94a3b8; border-t: 1px solid #e2e8f0; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>گزارش رسمـی و تحلیلی مقایسه‌ای فروش (سایان ERP)</h1>
+                    <p>پایش مقایسه‌ای وزن، مرجوعی کد ۱۳، مبلغ خالص و تغییرات فی نهایی اقلام</p>
+                </div>
+                <div class="info-box">
+                    <div>
+                        <strong>بازه اول (A):</strong> ${dateFrom} تا ${dateTo}<br/>
+                        <strong>بازه دوم (B):</strong> ${salesDateFromB} تا ${salesDateToB}
+                    </div>
+                    <div>
+                        <strong>نحوه تفکیک:</strong> ${compareGroupBy === 'group' ? 'گروه کالا' : 'نام دقیق محصول'}<br/>
+                        <strong>تاریخ صدور گزارش:</strong> ${formatDateToJalali(new Date().toISOString())}
+                    </div>
+                    <div>
+                        <strong>رشد وزن کل:</strong> <span class="${totalWeightDiff >= 0 ? 'pos' : 'neg'}">${totalWeightDiff >= 0 ? '+' : ''}${totalWeightDiff.toFixed(1)}%</span><br/>
+                        <strong>رشد مبلغ کل:</strong> <span class="${totalAmountDiff >= 0 ? 'pos' : 'neg'}">${totalAmountDiff >= 0 ? '+' : ''}${totalAmountDiff.toFixed(1)}%</span>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;">ردیف</th>
+                            <th>نام ${compareGroupBy === 'group' ? 'گروه کالا' : 'محصول'}</th>
+                            <th>وزن خالص A (ک‌گ)<br/><span style="font-size: 9px; font-weight: normal; color: #cbd5e1;">(مرجوعی)</span></th>
+                            <th>مبلغ خالص A (ریال)</th>
+                            <th>فی نهایی A (ریال)</th>
+                            <th>وزن خالص B (ک‌گ)<br/><span style="font-size: 9px; font-weight: normal; color: #cbd5e1;">(مرجوعی)</span></th>
+                            <th>مبلغ خالص B (ریال)</th>
+                            <th>فی نهایی B (ریال)</th>
+                            <th>تغییر وزن (%)</th>
+                            <th>تغییر مبلغ (%)</th>
+                            <th>تغییر فی (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map((row, idx) => {
+                            const wDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;
+                            const aDiff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
+                            const feeA = row.finalPriceA || (row.netWeightA ? row.netAmountA / row.netWeightA : 0);
+                            const feeB = row.finalPriceB || (row.netWeightB ? row.netAmountB / row.netWeightB : 0);
+                            const feeDiff = feeB ? ((feeA - feeB) / feeB) * 100 : 0;
+
+                            return `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td style="text-align: right; font-weight: bold;">${row.name}</td>
+                                    <td>
+                                        <strong>${row.netWeightA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                                        ${row.retWeightA > 0 ? `<br/><span class="ret">مرجوعی: ${row.retWeightA.toFixed(1)}</span>` : ''}
+                                    </td>
+                                    <td style="text-align: left; font-family: monospace;">${formatMoney(row.netAmountA)}</td>
+                                    <td style="text-align: left; font-family: monospace;">${formatMoney(Math.round(feeA))}</td>
+                                    <td>
+                                        <strong>${row.netWeightB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
+                                        ${row.retWeightB > 0 ? `<br/><span class="ret">مرجوعی: ${row.retWeightB.toFixed(1)}</span>` : ''}
+                                    </td>
+                                    <td style="text-align: left; font-family: monospace;">${formatMoney(row.netAmountB)}</td>
+                                    <td style="text-align: left; font-family: monospace;">${formatMoney(Math.round(feeB))}</td>
+                                    <td class="${wDiff >= 0 ? 'pos' : 'neg'}">${wDiff >= 0 ? '+' : ''}${wDiff.toFixed(1)}%</td>
+                                    <td class="${aDiff >= 0 ? 'pos' : 'neg'}">${aDiff >= 0 ? '+' : ''}${aDiff.toFixed(1)}%</td>
+                                    <td class="${feeDiff >= 0 ? 'pos' : 'neg'}">${feeDiff >= 0 ? '+' : ''}${feeDiff.toFixed(1)}%</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                        <tr class="total">
+                            <td colspan="2" style="text-align: right;">جمع کل عملکرد کارخانه:</td>
+                            <td>${sumNetWA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                            <td style="text-align: left;">${formatMoney(sumNetAmtA)}</td>
+                            <td style="text-align: left;">${formatMoney(Math.round(avgFeeA))}</td>
+                            <td>${sumNetWB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                            <td style="text-align: left;">${formatMoney(sumNetAmtB)}</td>
+                            <td style="text-align: left;">${formatMoney(Math.round(avgFeeB))}</td>
+                            <td class="${totalWeightDiff >= 0 ? 'pos' : 'neg'}">${totalWeightDiff >= 0 ? '+' : ''}${totalWeightDiff.toFixed(1)}%</td>
+                            <td class="${totalAmountDiff >= 0 ? 'pos' : 'neg'}">${totalAmountDiff >= 0 ? '+' : ''}${totalAmountDiff.toFixed(1)}%</td>
+                            <td class="${totalFeeDiff >= 0 ? 'pos' : 'neg'}">${totalFeeDiff >= 0 ? '+' : ''}${totalFeeDiff.toFixed(1)}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="signatures">
+                    <div>
+                        <p>امضا تهیه کننده / واحد فروش</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیر مالی</p>
+                        <div class="signature-box"></div>
+                    </div>
+                    <div>
+                        <p>امضا مدیریت عامل</p>
+                        <div class="signature-box"></div>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>سامانه مدیریت هوشمند و گزارشات مالی کارخانه سایان ERP - نسخه چاپ رسمی پایش مقایسه‌ای</p>
+                </div>
+            </body>
+            </html>
+        `;
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(docHtml);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
+    };
+
+    // Prepare chart comparison data grouped by Product Group or Detailed Item Name
     const getComparisonChartData = () => {
         const groups: { [key: string]: { 
             name: string; 
-            amountA: number; weightA: number; retAmountA: number; retWeightA: number; netAmountA: number; netWeightA: number;
-            amountB: number; weightB: number; retAmountB: number; retWeightB: number; netAmountB: number; netWeightB: number;
+            amountA: number; weightA: number; retAmountA: number; retWeightA: number; netAmountA: number; netWeightA: number; finalPriceA: number;
+            amountB: number; weightB: number; retAmountB: number; retWeightB: number; netAmountB: number; netWeightB: number; finalPriceB: number;
         } } = {};
 
-        const initGroup = (grp: string) => {
-            if (!groups[grp]) {
-                groups[grp] = { 
-                    name: grp, 
-                    amountA: 0, weightA: 0, retAmountA: 0, retWeightA: 0, netAmountA: 0, netWeightA: 0,
-                    amountB: 0, weightB: 0, retAmountB: 0, retWeightB: 0, netAmountB: 0, netWeightB: 0
+        const initGroup = (key: string, label: string) => {
+            if (!groups[key]) {
+                groups[key] = { 
+                    name: label, 
+                    amountA: 0, weightA: 0, retAmountA: 0, retWeightA: 0, netAmountA: 0, netWeightA: 0, finalPriceA: 0,
+                    amountB: 0, weightB: 0, retAmountB: 0, retWeightB: 0, netAmountB: 0, netWeightB: 0, finalPriceB: 0
                 };
             }
         };
 
         compareSalesDataA.forEach(row => {
-            const grp = row.GroupName || 'سایر گروه‌ها';
-            initGroup(grp);
+            const key = compareGroupBy === 'item' 
+                ? `${row.GroupName || 'سایر'} | ${row.ItemName || 'کالای بدون نام'}` 
+                : (row.GroupName || 'سایر گروه‌ها');
+            const label = compareGroupBy === 'item' 
+                ? `${row.ItemName || 'کالا'} (${row.GroupName || 'سایر'})` 
+                : (row.GroupName || 'سایر گروه‌ها');
+            initGroup(key, label);
+
             const amt = parseFloat(row.Amount || 0);
-            const qty = parseFloat(row.Quantity || 0);
-            if (row.OpCode === '13') {
-                groups[grp].retAmountA += amt;
-                groups[grp].retWeightA += qty;
-                groups[grp].netAmountA -= amt;
-                groups[grp].netWeightA -= qty;
+            const qty = parseNetWeight(row);
+            if (row.OpCode === '13' || row.OpCode === '14') {
+                groups[key].retAmountA += amt;
+                groups[key].retWeightA += qty;
+                groups[key].netAmountA -= amt;
+                groups[key].netWeightA -= qty;
             } else {
-                groups[grp].amountA += amt;
-                groups[grp].weightA += qty;
-                groups[grp].netAmountA += amt;
-                groups[grp].netWeightA += qty;
+                groups[key].amountA += amt;
+                groups[key].weightA += qty;
+                groups[key].netAmountA += amt;
+                groups[key].netWeightA += qty;
             }
         });
 
         compareSalesDataB.forEach(row => {
-            const grp = row.GroupName || 'سایر گروه‌ها';
-            initGroup(grp);
+            const key = compareGroupBy === 'item' 
+                ? `${row.GroupName || 'سایر'} | ${row.ItemName || 'کالای بدون نام'}` 
+                : (row.GroupName || 'سایر گروه‌ها');
+            const label = compareGroupBy === 'item' 
+                ? `${row.ItemName || 'کالا'} (${row.GroupName || 'سایر'})` 
+                : (row.GroupName || 'سایر گروه‌ها');
+            initGroup(key, label);
+
             const amt = parseFloat(row.Amount || 0);
-            const qty = parseFloat(row.Quantity || 0);
-            if (row.OpCode === '13') {
-                groups[grp].retAmountB += amt;
-                groups[grp].retWeightB += qty;
-                groups[grp].netAmountB -= amt;
-                groups[grp].netWeightB -= qty;
+            const qty = parseNetWeight(row);
+            if (row.OpCode === '13' || row.OpCode === '14') {
+                groups[key].retAmountB += amt;
+                groups[key].retWeightB += qty;
+                groups[key].netAmountB -= amt;
+                groups[key].netWeightB -= qty;
             } else {
-                groups[grp].amountB += amt;
-                groups[grp].weightB += qty;
-                groups[grp].netAmountB += amt;
-                groups[grp].netWeightB += qty;
+                groups[key].amountB += amt;
+                groups[key].weightB += qty;
+                groups[key].netAmountB += amt;
+                groups[key].netWeightB += qty;
             }
         });
 
-        return Object.values(groups);
+        return Object.values(groups).map(g => ({
+            ...g,
+            finalPriceA: g.netWeightA > 0 ? (g.netAmountA / g.netWeightA) : 0,
+            finalPriceB: g.netWeightB > 0 ? (g.netAmountB / g.netWeightB) : 0,
+        }));
     };
 
     // ==========================================
@@ -2504,42 +2739,111 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             </div>
                         </div>
 
-                        {/* Comparison date pickers */}
+                        {/* Comparison date pickers & Control Panel */}
                         {compareMode && (
-                            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/60 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
-                                <div>
-                                    <div className="text-xs font-bold text-blue-700 mb-1.5 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                        بازه اول ( Period A ) - پیش‌فرض بالا
-                                    </div>
-                                    <p className="text-[10px] text-slate-500">بازه زمانی که در فیلتر بالای صفحه تنظیم کرده‌اید اعمال می‌شود.</p>
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-blue-700 mb-1.5 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                        بازه دوم مقایسه ( Period B )
-                                    </div>
+                            <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 p-4 rounded-xl border border-blue-200 shadow-sm space-y-3 animate-fadeIn">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-blue-200/60 pb-3">
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1.5 w-full shadow-inner">
-                                            <input 
-                                                type="text" 
-                                                placeholder="۱۴۰۳/۰۱/۰۱"
-                                                value={salesDateFromB}
-                                                onChange={(e) => setSalesDateFromB(e.target.value)}
-                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
-                                            />
+                                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-sm">
+                                            VS
                                         </div>
-                                        <span className="text-xs text-slate-400 font-bold">تا</span>
-                                        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1.5 w-full shadow-inner">
-                                            <input 
-                                                type="text" 
-                                                placeholder="۱۴۰۳/۱۲/۲۹"
-                                                value={salesDateToB}
-                                                onChange={(e) => setSalesDateToB(e.target.value)}
-                                                className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
-                                            />
+                                        <div>
+                                            <h3 className="text-sm font-extrabold text-blue-950">داشبورد و پنل تخصصی پایش مقایسه‌ای فروش (Period A vs Period B)</h3>
+                                            <p className="text-[11px] text-blue-700 font-medium">مقایسه تراز فروش، مرجوعی کد ۱۳، وزن خالص و میانگین فی نهایی اقلام</p>
                                         </div>
                                     </div>
+                                    
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex bg-white rounded-lg p-1 border border-blue-200 shadow-sm">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCompareGroupBy('group')}
+                                                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${compareGroupBy === 'group' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                            >
+                                                تفکیک: گروه کالا
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCompareGroupBy('item')}
+                                                className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${compareGroupBy === 'item' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                            >
+                                                تفکیک: نام دقیق کالا
+                                            </button>
+                                        </div>
+
+                                        <button
+                                            onClick={handlePrintComparativeSales}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                                        >
+                                            <Printer className="w-3.5 h-3.5" />
+                                            <span>چاپ رسمی مقایسه‌ای (PDF)</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white/80 p-3 rounded-lg border border-blue-100 shadow-inner">
+                                        <div className="text-xs font-bold text-blue-800 mb-1 flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                                            بازه اول ( Period A ) — بازه اصلی بالای صفحه
+                                        </div>
+                                        <div className="text-xs font-mono font-bold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded border border-slate-200">
+                                            از {dateFrom || '---'} تا {dateTo || '---'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white/80 p-3 rounded-lg border border-indigo-100 shadow-inner">
+                                        <div className="text-xs font-bold text-indigo-800 mb-1 flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                                            بازه دوم مقایسه ( Period B )
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-2.5 py-1 w-full shadow-inner">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="۱۴۰۳/۰۱/۰۱"
+                                                    value={salesDateFromB}
+                                                    onChange={(e) => setSalesDateFromB(e.target.value)}
+                                                    className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
+                                                />
+                                            </div>
+                                            <span className="text-xs text-slate-400 font-bold">تا</span>
+                                            <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-2.5 py-1 w-full shadow-inner">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="۱۴۰۳/۱۲/۲۹"
+                                                    value={salesDateToB}
+                                                    onChange={(e) => setSalesDateToB(e.target.value)}
+                                                    className="text-xs bg-transparent outline-none focus:ring-0 text-slate-800 font-bold font-mono w-full text-center"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-blue-100">
+                                    <span className="text-[11px] font-bold text-slate-600">میانبر بازه دوم:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyQuickComparePreset('prev_year')}
+                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
+                                    >
+                                        همسان سال قبل (پارسال)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyQuickComparePreset('prev_month')}
+                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
+                                    >
+                                        ماه قبل
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyQuickComparePreset('prev_quarter')}
+                                        className="bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer shadow-xs"
+                                    >
+                                        فصل قبل
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -2974,13 +3278,17 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                     <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                                         {compareMode ? (
                                             <tr>
-                                                <th className="p-3.5 font-bold text-slate-700">گروه کالایی</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left">وزن دوره A (کیلوگرم)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left">وزن دوره B (کیلوگرم)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-center">تغییر وزن (%)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left">مبلغ دوره A (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-left">مبلغ دوره B (ریال)</th>
-                                                <th className="p-3.5 font-bold text-slate-700 text-center">تغییر مبلغ (%)</th>
+                                                <th className="p-3 w-10 text-center">ردیف</th>
+                                                <th className="p-3">{compareGroupBy === 'group' ? 'گروه کالایی' : 'نام دقیق محصول'}</th>
+                                                <th className="p-3 text-center bg-blue-900/40 text-blue-100">وزن خالص A (ک‌گ)</th>
+                                                <th className="p-3 text-left bg-blue-900/40 text-blue-100">فروش خالص A (ریال)</th>
+                                                <th className="p-3 text-left bg-blue-900/40 text-blue-100">فی نهایی A (ریال)</th>
+                                                <th className="p-3 text-center bg-indigo-900/40 text-indigo-100">وزن خالص B (ک‌گ)</th>
+                                                <th className="p-3 text-left bg-indigo-900/40 text-indigo-100">فروش خالص B (ریال)</th>
+                                                <th className="p-3 text-left bg-indigo-900/40 text-indigo-100">فی نهایی B (ریال)</th>
+                                                <th className="p-3 text-center">تغییر وزن (%)</th>
+                                                <th className="p-3 text-center">تغییر فروش (%)</th>
+                                                <th className="p-3 text-center">تغییر فی (%)</th>
                                             </tr>
                                         ) : (
                                             <tr>
@@ -2999,27 +3307,51 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                         {compareMode ? (
                                             chartData.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</td>
+                                                    <td colSpan={11} className="text-center py-10 text-slate-400 font-medium">موردی یافت نشد. دوره فیلتر را تغییر دهید.</td>
                                                 </tr>
                                             ) : (
                                                 chartData.map((row, idx) => {
-                                                    const weightDiff = row.weightB ? ((row.weightA - row.weightB) / row.weightB) * 100 : 0;
-                                                    const amountDiff = row.amountB ? ((row.amountA - row.amountB) / row.amountB) * 100 : 0;
+                                                    const weightDiff = row.netWeightB ? ((row.netWeightA - row.netWeightB) / row.netWeightB) * 100 : 0;
+                                                    const amountDiff = row.netAmountB ? ((row.netAmountA - row.netAmountB) / row.netAmountB) * 100 : 0;
+                                                    const feeA = row.finalPriceA || (row.netWeightA ? row.netAmountA / row.netWeightA : 0);
+                                                    const feeB = row.finalPriceB || (row.netWeightB ? row.netAmountB / row.netWeightB : 0);
+                                                    const feeDiff = feeB ? ((feeA - feeB) / feeB) * 100 : 0;
+
                                                     return (
-                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                                                            <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
                                                             <td className="p-3 font-bold text-slate-900">{row.name}</td>
-                                                            <td className="p-3 text-left font-mono font-semibold">{row.weightA.toFixed(1)}</td>
-                                                            <td className="p-3 text-left font-mono font-semibold">{row.weightB.toFixed(1)}</td>
+                                                            
+                                                            {/* Period A */}
+                                                            <td className="p-3 text-center bg-blue-50/40">
+                                                                <div className="font-mono font-bold text-blue-950">{row.netWeightA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                                                                {row.retWeightA > 0 && <div className="text-[9px] text-rose-600 font-semibold">مرجوعی: {row.retWeightA.toFixed(1)}</div>}
+                                                            </td>
+                                                            <td className="p-3 text-left font-mono font-bold text-blue-950 bg-blue-50/40">{formatMoney(row.netAmountA)}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-emerald-800 bg-blue-50/40">{formatMoney(Math.round(feeA))}</td>
+
+                                                            {/* Period B */}
+                                                            <td className="p-3 text-center bg-indigo-50/40">
+                                                                <div className="font-mono font-bold text-indigo-950">{row.netWeightB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                                                                {row.retWeightB > 0 && <div className="text-[9px] text-rose-600 font-semibold">مرجوعی: {row.retWeightB.toFixed(1)}</div>}
+                                                            </td>
+                                                            <td className="p-3 text-left font-mono font-bold text-indigo-950 bg-indigo-50/40">{formatMoney(row.netAmountB)}</td>
+                                                            <td className="p-3 text-left font-mono font-bold text-emerald-800 bg-indigo-50/40">{formatMoney(Math.round(feeB))}</td>
+
+                                                            {/* Diffs */}
                                                             <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${weightDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${weightDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                                                                     {weightDiff >= 0 ? '+' : ''}{weightDiff.toFixed(1)}%
                                                                 </span>
                                                             </td>
-                                                            <td className="p-3 text-left font-mono text-slate-700 font-medium">{formatMoney(row.amountA)}</td>
-                                                            <td className="p-3 text-left font-mono text-slate-700 font-medium">{formatMoney(row.amountB)}</td>
                                                             <td className="p-3 text-center">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${amountDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${amountDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                                                                     {amountDiff >= 0 ? '+' : ''}{amountDiff.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-center">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${feeDiff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                                                                    {feeDiff >= 0 ? '+' : ''}{feeDiff.toFixed(1)}%
                                                                 </span>
                                                             </td>
                                                         </tr>
@@ -3057,6 +3389,53 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                             )
                                         )}
                                     </tbody>
+                                    {compareMode && chartData.length > 0 && (
+                                        <tfoot>
+                                            <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700 text-xs">
+                                                <td colSpan={2} className="p-3 text-right">جمع کل کارخانه:</td>
+                                                {(() => {
+                                                    let sumNetWA = 0, sumNetWB = 0, sumNetAmtA = 0, sumNetAmtB = 0;
+                                                    chartData.forEach(r => {
+                                                        sumNetWA += r.netWeightA || 0;
+                                                        sumNetWB += r.netWeightB || 0;
+                                                        sumNetAmtA += r.netAmountA || 0;
+                                                        sumNetAmtB += r.netAmountB || 0;
+                                                    });
+                                                    const totWeightDiff = sumNetWB ? ((sumNetWA - sumNetWB) / sumNetWB) * 100 : 0;
+                                                    const totAmountDiff = sumNetAmtB ? ((sumNetAmtA - sumNetAmtB) / sumNetAmtB) * 100 : 0;
+                                                    const avgFeeA = sumNetWA ? (sumNetAmtA / sumNetWA) : 0;
+                                                    const avgFeeB = sumNetWB ? (sumNetAmtB / sumNetWB) : 0;
+                                                    const totFeeDiff = avgFeeB ? ((avgFeeA - avgFeeB) / avgFeeB) * 100 : 0;
+
+                                                    return (
+                                                        <>
+                                                            <td className="p-3 text-center font-mono text-blue-300">{sumNetWA.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono text-blue-300">{formatMoney(sumNetAmtA)}</td>
+                                                            <td className="p-3 text-left font-mono text-emerald-400">{formatMoney(Math.round(avgFeeA))}</td>
+                                                            <td className="p-3 text-center font-mono text-indigo-300">{sumNetWB.toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                                                            <td className="p-3 text-left font-mono text-indigo-300">{formatMoney(sumNetAmtB)}</td>
+                                                            <td className="p-3 text-left font-mono text-emerald-400">{formatMoney(Math.round(avgFeeB))}</td>
+                                                            <td className="p-3 text-center font-mono">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totWeightDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                                                    {totWeightDiff >= 0 ? '+' : ''}{totWeightDiff.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-center font-mono">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totAmountDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                                                    {totAmountDiff >= 0 ? '+' : ''}{totAmountDiff.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-center font-mono">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${totFeeDiff >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                                                    {totFeeDiff >= 0 ? '+' : ''}{totFeeDiff.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </tr>
+                                        </tfoot>
+                                    )}
                                 </table>
 
                                 {/* Mobile view */}
