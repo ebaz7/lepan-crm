@@ -344,39 +344,39 @@ const PurchaseDashboard = ({ requests, setActiveTab, currentUser, settings }: an
             case PurchaseRequestStatus.PENDING_SHIFT_LEADER: return hasPurchasePerm('canApproveShiftLeader');
             case PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER:
             case PurchaseRequestStatus.PENDING_FACTORY:
-                return hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER);
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canApproveFactoryDecision') || hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER);
+                return hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canApproveFactoryDecision') || hasPurchasePerm('canCommercialFinalize');
             
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
             case PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER:
-                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+                return hasPurchasePerm('canManageProformas') && r.location === 'Tehran';
             
             case PurchaseRequestStatus.PENDING_CEO_INITIAL:
             case PurchaseRequestStatus.PENDING_CEO_SELECTION:
-                return isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO');
+                return hasPurchasePerm('canApproveCEO');
                 
             case PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
-                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas') || isRole(UserRole.FACTORY_MANAGER)) && (r.location === 'Factory' || r.location === 'Zanjan');
+                return hasPurchasePerm('canManageProformas') && (r.location === 'Factory' || r.location === 'Zanjan');
                 
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL:
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
             case PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
-                return isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory');
+                return hasPurchasePerm('canApproveFactory');
 
             case PurchaseRequestStatus.PENDING_BUYER_EXECUTION:
-                return isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas');
+                return hasPurchasePerm('canManageProformas');
 
             case PurchaseRequestStatus.PENDING_TECHNICAL_APPROVAL:
                 return hasPurchasePerm('canApproveTechnical');
             
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return isRole(UserRole.QC) || hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return hasPurchasePerm('canWarehouseFinalize');
             
             default: return false;
         }
@@ -535,23 +535,23 @@ const RequestCard = ({ req, currentUser, onClick, settings }: { req: PurchaseReq
         switch (r.status) {
             case PurchaseRequestStatus.PENDING_TECHNICAL: return hasPurchasePerm('canApproveTechnical');
             case PurchaseRequestStatus.PENDING_FACTORY: return hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize') || isRole(UserRole.COMMERCIAL);
+            case PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION: return hasPurchasePerm('canCommercialFinalize');
             case PurchaseRequestStatus.PENDING_TEHRAN_PURCHASING: 
             case PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA:
-                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Tehran';
+                return hasPurchasePerm('canManageProformas') && r.location === 'Tehran';
             case PurchaseRequestStatus.PENDING_CEO_INITIAL:
             case PurchaseRequestStatus.PENDING_CEO_SELECTION:
-                return isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO');
+                return hasPurchasePerm('canApproveCEO');
             case PurchaseRequestStatus.PENDING_FACTORY_PURCHASING:
             case PurchaseRequestStatus.PENDING_FACTORY_PROFORMA:
-                return (isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canManageProformas')) && r.location === 'Factory';
+                return hasPurchasePerm('canManageProformas') && r.location === 'Factory';
             case PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE:
             case PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN:
-                return isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory');
-            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry');
-            case PurchaseRequestStatus.PENDING_QC: return isRole(UserRole.QC) || hasPurchasePerm('canCheckQC');
-            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize');
+                return hasPurchasePerm('canApproveFactory');
+            case PurchaseRequestStatus.PENDING_SECURITY_ENTRY: return hasPurchasePerm('canRegisterEntry');
+            case PurchaseRequestStatus.PENDING_QC: return hasPurchasePerm('canCheckQC');
+            case PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT: return hasPurchasePerm('canWarehouseFinalize');
             default: return false;
         }
     };
@@ -1430,10 +1430,7 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                                                         >
                                                             <Printer size={14}/>
                                                         </button>
-                                                        {((isCurrentStep(PurchaseRequestStatus.PENDING_CEO_SELECTION) && (isRole(UserRole.CEO) || isAdmin)) || 
-                                                          (isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_SELECTION) && (isRole(UserRole.FACTORY_MANAGER) || isAdmin)) || 
-                                                          isAdmin ||
-                                                          hasPurchasePerm('canSelectProforma')) && !p.isChosen && (
+                                                        {(isAdmin || hasPurchasePerm('canSelectProforma')) && !p.isChosen && (
                                                             <button 
                                                                 onClick={() => {
                                                                     if(confirm('آیا این پیش‌فاکتور را برای خرید تایید می‌کنید؟')) {
@@ -1544,42 +1541,42 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                         )}
                         
                         {/* Stage 2: Warehouse Stock Check */}
-                        {(isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) || isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER)) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory') || isRole(UserRole.WAREHOUSE_KEEPER)) && (
+                        {(isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY) || isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_KEEPER)) && (isAdmin || hasPurchasePerm('canApproveWarehouseKeeper') || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => setShowWarehouseCheckModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 text-xs shadow-lg" disabled={actionLoading}>بررسی موجودی انبار (انباردار کارخانه)</button>
                         )}
 
                         {/* Stage 3: Factory Manager Branch Selection */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactoryDecision')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_DECISION) && (isAdmin || hasPurchasePerm('canApproveFactoryDecision')) && (
                             <button onClick={() => setShowFactoryBranchModal(true)} className="bg-amber-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-amber-100 text-xs hover:scale-105 transition-all" disabled={actionLoading}>تعیین و تایید مسیر تامین (مدیر کارخانه)</button>
                         )}
 
                         {/* Tehran Branch: CEO Initial Approval */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || isRole(UserRole.CEO) || hasPurchasePerm('canApproveCEO')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_CEO_INITIAL) && (isAdmin || hasPurchasePerm('canApproveCEO')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA, {}, 'تایید اولیه و مجوز اخذ استعلام')} className="bg-sky-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>تایید اولیه استعلام و اجازه ثبت پروفرما</button>
                         )}
 
                         {/* Tehran Branch: Proforma Entry */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas') || isRole(UserRole.COMMERCIAL)) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_TEHRAN_PROFORMA) && request.proformas.length > 0 && (isAdmin || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER, {}, 'ارسال پروفرماها به مدیر بازرگانی')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs" disabled={actionLoading}>ارسال لیست پیش‌فاکتورها به مدیر بازرگانی</button>
                         )}
 
                         {/* Tehran Branch: Commercial Manager Selection */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER) && (isAdmin || isRole(UserRole.COMMERCIAL) || hasPurchasePerm('canCommercialFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_COMMERCIAL_MANAGER) && (isAdmin || hasPurchasePerm('canCommercialFinalize')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_CEO_SELECTION, {}, 'بررسی بازرگانی و ارسال به مدیرعامل')} className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>تایید مدیر بازرگانی و ارسال به مدیرعامل</button>
                         )}
 
                         {/* Zanjan Branch: Proposal & Purchasing */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_ZANJAN_PURCHASING) && (isAdmin || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL, {}, 'ارسال پیشنهاد خرید کارخانه به مدیر')} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>ارسال پیشنهاد خرید به مدیر کارخانه</button>
                         )}
 
                         {/* Zanjan Branch: Factory Manager Approval */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_MANAGER_APPROVAL) && (isAdmin || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_BUYER_EXECUTION, {}, 'دستور خرید و صدور سفارش کارخانه')} className="bg-teal-700 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>دستور خرید و ارجاع به کارپرداز</button>
                         )}
 
                         {/* Zanjan Branch: Purchasing Agent Execution */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_BUYER_EXECUTION) && (isAdmin || isRole(UserRole.COMMERCIAL) || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canManageProformas')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_BUYER_EXECUTION) && (isAdmin || hasPurchasePerm('canManageProformas')) && (
                             <button onClick={() => setShowPurchasingAgentModal(true)} className="bg-teal-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg hover:scale-105 transition-all">ثبت خرید کارپرداز و صدور فاکتور</button>
                         )}
 
@@ -1589,32 +1586,32 @@ const ViewRequestModal = ({ request, onClose, currentUser, onSuccess, settings, 
                         )}
 
                         {/* Common: Factory Manager Entry Approval */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_ENTRY_APPROVAL) && (isAdmin || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_SECURITY_ENTRY, {}, 'صدور مجوز ورود کالا به کارخانه')} className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black text-xs shadow-lg" disabled={actionLoading}>مجوز ورود کالا به کارخانه</button>
                         )}
 
                         {/* Security Entry */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || isRole(UserRole.SECURITY_GUARD) || hasPurchasePerm('canRegisterEntry')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_SECURITY_ENTRY) && (isAdmin || hasPurchasePerm('canRegisterEntry')) && (
                             <button onClick={() => setShowSecurityModal(true)} className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black transition-all hover:scale-105 shadow-xl text-xs shadow-orange-100">ثبت ورود کالا (انتظامات)</button>
                         )}
 
                         {/* Quality Control (QC) */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || isRole(UserRole.QC) || hasPurchasePerm('canCheckQC')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_QC) && (isAdmin || hasPurchasePerm('canCheckQC')) && (
                             <button onClick={() => setShowQCModal(true)} className="bg-green-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-green-100 transition-all hover:scale-105 text-xs">بررسی و تایید کنترل کیفی (QC)</button>
                         )}
 
                         {/* Factory Manager Final Approve */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_APPROVE) && (isAdmin || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT, {}, 'تایید نهایی تحویل و ارسال به انبار')} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs" disabled={actionLoading}>تایید نهایی ورود کالا (مدیر کارخانه)</button>
                         )}
 
                         {/* Warehouse Receipt */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || isRole(UserRole.WAREHOUSE_KEEPER) || hasPurchasePerm('canWarehouseFinalize')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_WAREHOUSE_RECEIPT) && (isAdmin || hasPurchasePerm('canWarehouseFinalize')) && (
                             <button onClick={() => setShowWarehouseModal(true)} className="bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-200 hover:scale-105 transition-all text-xs">صدور رسید انبار نهایی</button>
                         )}
 
                         {/* Factory Manager Final Sign */}
-                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || isRole(UserRole.FACTORY_MANAGER) || hasPurchasePerm('canApproveFactory')) && (
+                        {isCurrentStep(PurchaseRequestStatus.PENDING_FACTORY_FINAL_SIGN) && (isAdmin || hasPurchasePerm('canApproveFactory')) && (
                             <button onClick={() => handleAction(PurchaseRequestStatus.COMPLETED, {}, 'امضای الکترونیکی و بایگانی پرونده')} className="bg-indigo-900 text-white px-8 py-3 rounded-2xl font-black shadow-2xl transition-all hover:bg-black text-xs">امضا، تکمیل و بایگانی نهایی پرونده</button>
                         )}
 
