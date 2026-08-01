@@ -497,7 +497,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             t11.Field_007 as Amount,
             t_group.GroupName,
             t07.Field_006 as CustomerName,
-            t10.Field_009 as OpCode
+            t10.Field_004 as OpCode
         FROM STR_TBL_010 t10
         INNER JOIN STR_TBL_011 t11 ON t11.Field_004 = t10.Field_005 
                                    AND t11.Field_003 = t10.Field_004
@@ -512,9 +512,9 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
         ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
         LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
         WHERE (
-            (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
+            (t10.Field_004 = '3' AND t11.Field_007 > 0)
             OR 
-            (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
+            (t10.Field_004 = '4')
           )
           AND (
             t10.Field_008 LIKE '${gregDate}%'
@@ -563,7 +563,7 @@ const sendDailySalesReportForDate = async (db, dateObj, labelSuffix = '', target
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
             const amt = parseFloat(inv.Amount || 0);
-            const isReturn = inv.OpCode === '13' || inv.OpCode === '14';
+            const isReturn = inv.OpCode === '4' || inv.OpCode === '13' || inv.OpCode === '14';
             
             if (isReturn) {
                 totalReturnQty += qty;
@@ -1742,6 +1742,220 @@ app.delete('/api/chat/:id', async (req, res) => {
     }
 
     res.json(db.messages || []); 
+});
+
+// --- SETTINGS AND DATABASE CONFIGURATION ENDPOINTS ---
+app.get('/api/settings', (req, res) => {
+    const db = getDb();
+    res.json(db.settings || {});
+});
+
+app.post('/api/settings', async (req, res) => {
+    const db = getDb();
+    db.settings = { ...(db.settings || {}), ...req.body };
+    saveDb(db);
+    
+    // Automatically re-initialize bots on settings save
+    try {
+        if (db.settings.telegramBotToken) {
+            const tg = await safeImport('./backend/telegram.js');
+            if (tg && tg.initTelegram) {
+                await tg.initTelegram(db.settings.telegramBotToken);
+            }
+        }
+        if (db.settings.baleBotToken) {
+            const bale = await safeImport('./backend/bale.js');
+            if (bale && bale.initBaleBot) {
+                await bale.initBaleBot(db.settings.baleBotToken);
+            }
+        }
+    } catch (err) {
+        console.error("Auto-restart bots from settings save failed:", err);
+    }
+
+    res.json(db.settings);
+});
+
+// --- NUMBER SEQUENCE GENERATORS ---
+app.get('/api/next-exit-permit-number', (req, res) => {
+    const db = getDb();
+    const permits = db.exitPermits || [];
+    let maxNum = 1000;
+    permits.forEach(p => {
+        const num = parseInt(p.permitNumber);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+    });
+    res.json({ nextNumber: maxNum + 1 });
+});
+
+app.get('/api/next-tracking-number', (req, res) => {
+    const db = getDb();
+    const company = req.query.company || '';
+    const startNum = db.settings?.currentTrackingNumber || 1000;
+    const nextNum = utils.findNextGapNumber(db.orders, company, 'trackingNumber', startNum);
+    res.json({ nextTrackingNumber: nextNum });
+});
+
+app.get('/api/next-bijak-number', (req, res) => {
+    const db = getDb();
+    const company = req.query.company || '';
+    const txs = db.warehouseTransactions || [];
+    let maxNum = 1000;
+    txs.forEach(t => {
+        const tComp = t.company || '';
+        if (tComp === company) {
+            const num = parseInt(t.bijakNumber);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    res.json({ nextNumber: maxNum + 1 });
+});
+
+app.get('/api/next-meeting-number', (req, res) => {
+    const db = getDb();
+    const meetings = db.meetings || [];
+    let maxNum = 1000;
+    meetings.forEach(m => {
+        if (m.number && m.number.startsWith('M-')) {
+            const num = parseInt(m.number.replace('M-', ''));
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    res.json({ nextNumber: `M-${maxNum + 1}` });
+});
+
+app.get('/api/next-purchase-request-number', (req, res) => {
+    const db = getDb();
+    const reqs = db.purchaseRequests || [];
+    let maxNum = 1000;
+    reqs.forEach(r => {
+        if (r.number && r.number.startsWith('PR-')) {
+            const num = parseInt(r.number.replace('PR-', ''));
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    res.json({ nextNumber: `PR-${maxNum + 1}` });
+});
+
+app.get('/api/next-cheque-receipt-number', (req, res) => {
+    const db = getDb();
+    const company = req.query.company || '';
+    const receipts = db.chequeReceipts || [];
+    let maxNum = 1000;
+    receipts.forEach(r => {
+        const rComp = r.company || '';
+        if (rComp === company) {
+            let numStr = r.number || '';
+            if (numStr.startsWith('CR-')) {
+                numStr = numStr.replace('CR-', '');
+            }
+            const num = parseInt(numStr);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    res.json({ nextNumber: `CR-${maxNum + 1}` });
+});
+
+// --- MEETINGS BOT ACTIONS ---
+app.post('/api/meetings/:id/announce', async (req, res) => {
+    try {
+        const db = getDb();
+        const meeting = (db.meetings || []).find(m => m.id === req.params.id);
+        if (meeting) {
+            await notifyMeetingAnnouncement(meeting, db);
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'صورتجلسه یافت نشد' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/meetings/:id/send-minutes', async (req, res) => {
+    try {
+        const db = getDb();
+        const meeting = (db.meetings || []).find(m => m.id === req.params.id);
+        if (meeting) {
+            await notifyMeetingMinutes(meeting, db);
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'صورتجلسه یافت نشد' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- FULL-STACK DATA SYNCHRONIZATION ENDPOINTS ---
+const CRUD_COLLECTIONS = [
+    { route: 'orders', dbKey: 'orders' },
+    { route: 'exit-permits', dbKey: 'exitPermits' },
+    { route: 'security/logs', dbKey: 'securityLogs' },
+    { route: 'security/delays', dbKey: 'personnelDelays' },
+    { route: 'security/incidents', dbKey: 'securityIncidents' },
+    { route: 'warehouse/items', dbKey: 'warehouseItems' },
+    { route: 'warehouse/transactions', dbKey: 'warehouseTransactions' },
+    { route: 'trade', dbKey: 'tradeRecords' },
+    { route: 'notes', dbKey: 'notes' },
+    { route: 'meetings', dbKey: 'meetings' },
+    { route: 'purchase-requests', dbKey: 'purchaseRequests' },
+    { route: 'part-master-data', dbKey: 'partMasterData' },
+    { route: 'secretariat-letters', dbKey: 'secretariatLetters' },
+    { route: 'secretariat-settings', dbKey: 'secretariatSettings' },
+    { route: 'secretariat-templates', dbKey: 'secretariatTemplates' },
+    { route: 'cheque-receipts', dbKey: 'chequeReceipts' },
+    { route: 'customer-balances', dbKey: 'customerBalances' },
+    { route: 'customer-balances/chat-codes', dbKey: 'customerChatCodes' }
+];
+
+CRUD_COLLECTIONS.forEach(({ route, dbKey }) => {
+    // GET
+    app.get(`/api/${route}`, (req, res) => {
+        const db = getDb();
+        if (!db[dbKey]) db[dbKey] = [];
+        res.json(db[dbKey]);
+    });
+
+    // POST
+    app.post(`/api/${route}`, (req, res) => {
+        const db = getDb();
+        if (!db[dbKey]) db[dbKey] = [];
+        const item = req.body;
+        const existingIdx = db[dbKey].findIndex(x => x.id === item.id);
+        if (existingIdx > -1) {
+            db[dbKey][existingIdx] = item;
+        } else {
+            db[dbKey].push(item);
+        }
+        saveDb(db);
+        res.json(db[dbKey]);
+    });
+
+    // PUT
+    app.put(`/api/${route}/:id`, (req, res) => {
+        const db = getDb();
+        if (!db[dbKey]) db[dbKey] = [];
+        const idx = db[dbKey].findIndex(x => x.id === req.params.id);
+        if (idx > -1) {
+            db[dbKey][idx] = { ...db[dbKey][idx], ...req.body };
+            saveDb(db);
+            res.json(db[dbKey]);
+        } else {
+            db[dbKey].push({ id: req.params.id, ...req.body });
+            saveDb(db);
+            res.json(db[dbKey]);
+        }
+    });
+
+    // DELETE
+    app.delete(`/api/${route}/:id`, (req, res) => {
+        const db = getDb();
+        if (!db[dbKey]) db[dbKey] = [];
+        db[dbKey] = db[dbKey].filter(x => x.id !== req.params.id);
+        saveDb(db);
+        res.json(db[dbKey]);
+    });
 });
 
 app.get('/api/groups', (req, res) => res.json(getDb().groups || []));

@@ -148,6 +148,59 @@ export const SayanSalesDashboard: React.FC<SayanSalesDashboardProps> = ({
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPreset, setSelectedPreset] = useState<string>('custom');
+
+  // Preset generator for quick Period B selection
+  const applyPreset = (preset: 'prev_year' | 'prev_month' | 'prev_quarter') => {
+    if (!dateFrom || !dateTo || !onCompareDateRangeChange) return;
+    try {
+      const partsFrom = dateFrom.split('/');
+      const partsTo = dateTo.split('/');
+      if (partsFrom.length === 3 && partsTo.length === 3) {
+        const yFrom = parseInt(partsFrom[0], 10);
+        const mFrom = parseInt(partsFrom[1], 10);
+        const dFrom = parseInt(partsFrom[2], 10);
+        const yTo = parseInt(partsTo[0], 10);
+        const mTo = parseInt(partsTo[1], 10);
+        const dTo = parseInt(partsTo[2], 10);
+
+        let bFrom = '';
+        let bTo = '';
+
+        if (preset === 'prev_year') {
+          bFrom = `${yFrom - 1}/${String(mFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+          bTo = `${yTo - 1}/${String(mTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+        } else if (preset === 'prev_month') {
+          let prevMFrom = mFrom - 1;
+          let prevYFrom = yFrom;
+          if (prevMFrom < 1) { prevMFrom = 12; prevYFrom--; }
+          
+          let prevMTo = mTo - 1;
+          let prevYTo = yTo;
+          if (prevMTo < 1) { prevMTo = 12; prevYTo--; }
+
+          bFrom = `${prevYFrom}/${String(prevMFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+          bTo = `${prevYTo}/${String(prevMTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+        } else if (preset === 'prev_quarter') {
+          let prevMFrom = mFrom - 3;
+          let prevYFrom = yFrom;
+          if (prevMFrom < 1) { prevMFrom += 12; prevYFrom--; }
+
+          let prevMTo = mTo - 3;
+          let prevYTo = yTo;
+          if (prevMTo < 1) { prevMTo += 12; prevYTo--; }
+
+          bFrom = `${prevYFrom}/${String(prevMFrom).padStart(2, '0')}/${String(dFrom).padStart(2, '0')}`;
+          bTo = `${prevYTo}/${String(prevMTo).padStart(2, '0')}/${String(dTo).padStart(2, '0')}`;
+        }
+
+        onCompareDateRangeChange(bFrom, bTo);
+        if (onToggleCompareMode) onToggleCompareMode(true);
+        toast.success(`بازه دوم مقایسه به همسان (${bFrom} تا ${bTo}) ست شد.`);
+      }
+    } catch (e: any) {
+      toast.error('خطا در محاسبه تاریخ مقایسه');
+    }
+  };
   
   // Bot Modal State
   const [isBotModalOpen, setIsBotModalOpen] = useState<boolean>(false);
@@ -228,7 +281,7 @@ export const SayanSalesDashboard: React.FC<SayanSalesDashboardProps> = ({
     salesData.forEach(row => {
       const amt = parseFloat(row.Amount || '0') || 0;
       const qty = parseFloat(row.Quantity || '0') || 0;
-      const isReturn = row.OpCode === '13' || row.OpCode === '14';
+      const isReturn = row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14';
       const rowDate = new Date(row.Date);
       const invNum = row.InvoiceNum || row.DocId || 'بدون شماره';
       const custName = row.CustomerName || 'مشتری متفرقه';
@@ -491,7 +544,7 @@ export const SayanSalesDashboard: React.FC<SayanSalesDashboardProps> = ({
     compareDataB.forEach(row => {
       const amt = parseFloat(row.Amount || '0') || 0;
       const qty = parseFloat(row.Quantity || '0') || 0;
-      const isReturn = row.OpCode === '13' || row.OpCode === '14';
+      const isReturn = row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14';
       const cat = classifyMajorCategory(row.GroupName, row.ItemName);
 
       if (isReturn) {
@@ -1481,96 +1534,209 @@ export const SayanSalesDashboard: React.FC<SayanSalesDashboardProps> = ({
       {activeTab === 'compare' && (
         <div className="space-y-4 animate-fadeIn">
           
-          {/* COMPARISON METRICS SUMMARY CARDS */}
-          {comparisonMetrics && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* COMPARATIVE CONTROL PANEL */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 text-white p-4 rounded-2xl shadow-md border border-indigo-500/30 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-blue-200">تنظیمات و پنل تخصصی پایش مقایسه‌ای فروش (Period A vs Period B)</h3>
+                <p className="text-[11px] text-slate-300">مقایسه تراز فروش، مرجوعی کد ۱۳، وزن خالص و میانگین فی نهایی اقلام</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onToggleCompareMode) onToggleCompareMode(!compareMode);
+                  }}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                    compareMode 
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' 
+                      : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+                  }`}
+                >
+                  {compareMode ? '✅ حالت مقایسه: فعال' : '❌ حالت مقایسه: غیرفعال'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white/5 p-3 rounded-xl border border-white/10">
+                <div className="text-[11px] font-bold text-slate-400 mb-1">بازه اول ( Period A ) — بازه اصلی بالای صفحه</div>
+                <div className="text-xs font-mono font-bold text-blue-200">
+                  از {dateFrom || '---'} تا {dateTo || '---'}
+                </div>
+              </div>
               
-              {/* Card 1: Amount Growth */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
-                  <span>تغییرات مبلغ خالص فروش</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
-                    comparisonMetrics.amtGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {comparisonMetrics.amtGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    {comparisonMetrics.amtGrowthPct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="text-lg font-black text-slate-900 mt-2 font-mono">
-                  {formatMoney(comparisonMetrics.netAmtA)} <span className="text-xs text-slate-400">vs {formatMoney(comparisonMetrics.netAmtB)}</span>
-                </div>
-                <div className={`text-xs font-bold mt-1 ${comparisonMetrics.amtDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  اختلاف: {comparisonMetrics.amtDiff >= 0 ? '+' : ''}{formatMoney(comparisonMetrics.amtDiff)} ریال
-                </div>
-              </div>
-
-              {/* Card 2: Weight Growth */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
-                  <span>تغییرات وزن خالص فروش</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
-                    comparisonMetrics.wgtGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {comparisonMetrics.wgtGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    {comparisonMetrics.wgtGrowthPct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="text-lg font-black text-slate-900 mt-2 font-mono">
-                  {formatWeight(comparisonMetrics.netWgtA)} <span className="text-xs text-slate-400">vs {formatWeight(comparisonMetrics.netWgtB)}</span> ک‌گ
-                </div>
-                <div className={`text-xs font-bold mt-1 ${comparisonMetrics.wgtDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  اختلاف: {comparisonMetrics.wgtDiff >= 0 ? '+' : ''}{formatWeight(comparisonMetrics.wgtDiff)} ک‌گ
+              <div className="bg-white/5 p-3 rounded-xl border border-white/10 space-y-2">
+                <div className="text-[11px] font-bold text-slate-400 mb-1">بازه دوم مقایسه ( Period B )</div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 w-full">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <input 
+                      type="text" 
+                      placeholder="۱۴۰۳/۰۱/۰۱"
+                      value={salesDateFromB}
+                      onChange={(e) => {
+                        if (onCompareDateRangeChange) onCompareDateRangeChange(e.target.value, salesDateToB);
+                      }}
+                      className="text-xs bg-transparent outline-none text-white font-bold font-mono w-full text-center"
+                    />
+                  </div>
+                  <span className="text-xs text-slate-400 font-bold">تا</span>
+                  <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 w-full">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <input 
+                      type="text" 
+                      placeholder="۱۴۰۳/۱۲/۲۹"
+                      value={salesDateToB}
+                      onChange={(e) => {
+                        if (onCompareDateRangeChange) onCompareDateRangeChange(salesDateFromB, e.target.value);
+                      }}
+                      className="text-xs bg-transparent outline-none text-white font-bold font-mono w-full text-center"
+                    />
+                  </div>
                 </div>
               </div>
-
-              {/* Card 3: Fee Growth */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
-                  <span>تغییرات فی نهایی میانگین</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
-                    comparisonMetrics.feeGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {comparisonMetrics.feeGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    {comparisonMetrics.feeGrowthPct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="text-lg font-black text-slate-900 mt-2 font-mono">
-                  {formatMoney(comparisonMetrics.avgFeeA)} <span className="text-xs text-slate-400">vs {formatMoney(comparisonMetrics.avgFeeB)}</span> ریال
-                </div>
-                <div className={`text-xs font-bold mt-1 ${comparisonMetrics.feeDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  اختلاف: {comparisonMetrics.feeDiff >= 0 ? '+' : ''}{formatMoney(comparisonMetrics.feeDiff)} ریال/ک‌گ
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* COMPARISON TABLE BY CATEGORY */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <h2 className="text-sm font-extrabold flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
-                <span>جدول مقایسه‌ای فروش گروههای کالا (Period A vs Period B)</span>
-              </h2>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700">
-                    <th className="p-3">نام گروه اصلی کالا</th>
-                    <th className="p-3 text-left bg-blue-50/60">فروش خالص A (ریال)</th>
-                    <th className="p-3 text-left bg-indigo-50/60">فروش خالص B (ریال)</th>
-                    <th className="p-3 text-center bg-blue-50/60">وزن A (ک‌گ)</th>
-                    <th className="p-3 text-center bg-indigo-50/60">وزن B (ک‌گ)</th>
-                    <th className="p-3 text-left bg-blue-50/60">فی A</th>
-                    <th className="p-3 text-left bg-indigo-50/60">فی B</th>
-                    <th className="p-3 text-left font-black">اختلاف مبلغ</th>
-                    <th className="p-3 text-center font-black">درصد رشد/افت</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {comparisonMetrics?.compareRows.map((row, idx) => (
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/10">
+              <span className="text-[11px] font-bold text-slate-400">میانبر بازه دوم:</span>
+              <button
+                type="button"
+                onClick={() => applyPreset('prev_year')}
+                className="bg-white/10 hover:bg-white/25 border border-white/20 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer text-blue-200"
+              >
+                همسان سال قبل (پارسال)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('prev_month')}
+                className="bg-white/10 hover:bg-white/25 border border-white/20 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer text-blue-200"
+              >
+                ماه قبل
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('prev_quarter')}
+                className="bg-white/10 hover:bg-white/25 border border-white/20 rounded text-[11px] px-2.5 py-1 font-bold transition-all cursor-pointer text-blue-200"
+              >
+                فصل قبل
+              </button>
+            </div>
+          </div>
+
+          {!compareMode ? (
+            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl">
+              <TrendingUp className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+              <h4 className="text-sm font-extrabold text-slate-800">حالت مقایسه دو بازه غیرفعال است</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                برای فعال‌سازی مقایسه تراز فروش بازه اول با بازه دوم، لطفاً روی دکمه «حالت مقایسه: غیرفعال» در پنل بالا کلیک کنید تا به وضعیت فعال تغییر کند.
+              </p>
+            </div>
+          ) : isLoading ? (
+            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl">
+              <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
+              <p className="text-xs text-slate-600 font-bold">در حال دریافت و تحلیل آماری داده‌های بازه دوم از سیستم سایان ERP...</p>
+            </div>
+          ) : !compareDataB || compareDataB.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl">
+              <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+              <h4 className="text-sm font-extrabold text-slate-800">هیچ تراکنشی در بازه دوم یافت نشد</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                تراکنشی در تاریخ‌های مشخص شده برای بازه دوم در سیستم ERP یافت نشد. می‌توانید با دکمه‌های میانبر (مثلا همسان سال قبل) بازه دیگری انتخاب کنید.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* COMPARISON METRICS SUMMARY CARDS */}
+              {comparisonMetrics && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  {/* Card 1: Amount Growth */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
+                      <span>تغییرات مبلغ خالص فروش</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
+                        comparisonMetrics.amtGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {comparisonMetrics.amtGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                        {comparisonMetrics.amtGrowthPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900 mt-2 font-mono">
+                      {formatMoney(comparisonMetrics.netAmtA)} <span className="text-xs text-slate-400">vs {formatMoney(comparisonMetrics.netAmtB)}</span>
+                    </div>
+                    <div className={`text-xs font-bold mt-1 ${comparisonMetrics.amtDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      اختلاف: {comparisonMetrics.amtDiff >= 0 ? '+' : ''}{formatMoney(comparisonMetrics.amtDiff)} ریال
+                    </div>
+                  </div>
+
+                  {/* Card 2: Weight Growth */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
+                      <span>تغییرات وزن خالص فروش</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
+                        comparisonMetrics.wgtGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {comparisonMetrics.wgtGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                        {comparisonMetrics.wgtGrowthPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900 mt-2 font-mono">
+                      {formatWeight(comparisonMetrics.netWgtA)} <span className="text-xs text-slate-400">vs {formatWeight(comparisonMetrics.netWgtB)}</span> ک‌گ
+                    </div>
+                    <div className={`text-xs font-bold mt-1 ${comparisonMetrics.wgtDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      اختلاف: {comparisonMetrics.wgtDiff >= 0 ? '+' : ''}{formatWeight(comparisonMetrics.wgtDiff)} ک‌گ
+                    </div>
+                  </div>
+
+                  {/* Card 3: Fee Growth */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
+                      <span>تغییرات فی نهایی میانگین</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
+                        comparisonMetrics.feeGrowthPct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {comparisonMetrics.feeGrowthPct >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                        {comparisonMetrics.feeGrowthPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900 mt-2 font-mono">
+                      {formatMoney(comparisonMetrics.avgFeeA)} <span className="text-xs text-slate-400">vs {formatMoney(comparisonMetrics.avgFeeB)}</span> ریال
+                    </div>
+                    <div className={`text-xs font-bold mt-1 ${comparisonMetrics.feeDiff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      اختلاف: {comparisonMetrics.feeDiff >= 0 ? '+' : ''}{formatMoney(comparisonMetrics.feeDiff)} ریال/ک‌گ
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* COMPARISON TABLE BY CATEGORY */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                  <h2 className="text-sm font-extrabold flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                    <span>جدول مقایسه‌ای فروش گروههای کالا (Period A vs Period B)</span>
+                  </h2>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 font-bold border-b border-slate-200 text-slate-700">
+                        <th className="p-3">نام گروه اصلی کالا</th>
+                        <th className="p-3 text-left bg-blue-50/60">فروش خالص A (ریال)</th>
+                        <th className="p-3 text-left bg-indigo-50/60">فروش خالص B (ریال)</th>
+                        <th className="p-3 text-center bg-blue-50/60">وزن A (ک‌گ)</th>
+                        <th className="p-3 text-center bg-indigo-50/60">وزن B (ک‌گ)</th>
+                        <th className="p-3 text-left bg-blue-50/60">فی A</th>
+                        <th className="p-3 text-left bg-indigo-50/60">فی B</th>
+                        <th className="p-3 text-left font-black">اختلاف مبلغ</th>
+                        <th className="p-3 text-center font-black">درصد رشد/افت</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {comparisonMetrics?.compareRows.map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3 font-bold text-slate-900">{row.catName}</td>
                       <td className="p-3 text-left font-mono font-bold text-blue-900 bg-blue-50/20">{formatMoney(row.netAmtA)}</td>
@@ -1595,7 +1761,8 @@ export const SayanSalesDashboard: React.FC<SayanSalesDashboardProps> = ({
               </table>
             </div>
           </div>
-
+            </>
+          )}
         </div>
       )}
 

@@ -821,9 +821,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     t10.Field_006 as InvoiceNum,
                     t10.Field_008 as Date,
                     t10.Field_029 as Notes,
-                    t10.Field_009 as OpCode,
+                    t10.Field_004 as OpCode,
                     t11.Field_005 as ItemCode,
-                    t22.Field_004 as ItemName,
+                    COALESCE(t22.Field_004, t_name.ItemName, t11.Field_005, 'کالای بدون نام') as ItemName,
                     t11.Field_006 as Quantity,
                     t11.Field_031 as ItemNotes,
                     t11.Field_007 as Amount,
@@ -834,6 +834,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                           AND t11.Field_003 = t10.Field_004
                 LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                 LEFT JOIN (
+                    SELECT RTRIM(LTRIM(t21_sub.Field_004)) as ItemCode, MIN(t02_sub.Field_003) as ItemName
+                    FROM IND_TBL_021 t21_sub
+                    LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
+                    GROUP BY t21_sub.Field_004
+                ) t_name ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_name.ItemCode))
+                LEFT JOIN (
                     SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                     FROM IND_TBL_021 t21_sub
                     LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
@@ -843,11 +849,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                 ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
                 LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                 WHERE (
-                    (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
+                    (t10.Field_004 = '3' AND t11.Field_007 > 0)
                     OR
-                    (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
+                    (t10.Field_004 = '4')
                   )
-                  ${dateFilter}
+                  \${dateFilter}
                 ORDER BY t10.Field_008 DESC
             `;
             const dataA = await runSayanQuery(sqlA);
@@ -873,9 +879,9 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         t10.Field_006 as InvoiceNum,
                         t10.Field_008 as Date,
                         t10.Field_029 as Notes,
-                        t10.Field_009 as OpCode,
+                        t10.Field_004 as OpCode,
                         t11.Field_005 as ItemCode,
-                        t22.Field_004 as ItemName,
+                        COALESCE(t22.Field_004, t_name.ItemName, t11.Field_005, 'کالای بدون نام') as ItemName,
                         t11.Field_006 as Quantity,
                         t11.Field_031 as ItemNotes,
                         t11.Field_007 as Amount,
@@ -886,6 +892,12 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                               AND t11.Field_003 = t10.Field_004
                     LEFT JOIN IND_TBL_022 t22 ON RTRIM(LTRIM(t22.Field_005)) = RTRIM(LTRIM(t11.Field_005))
                     LEFT JOIN (
+                        SELECT RTRIM(LTRIM(t21_sub.Field_004)) as ItemCode, MIN(t02_sub.Field_003) as ItemName
+                        FROM IND_TBL_021 t21_sub
+                        LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
+                        GROUP BY t21_sub.Field_004
+                    ) t_name ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_name.ItemCode))
+                    LEFT JOIN (
                         SELECT t21_sub.Field_004 as ItemCode, MIN(COALESCE(t02_grandparent.Field_003, t02_parent.Field_003, t02_sub.Field_003)) as GroupName
                         FROM IND_TBL_021 t21_sub
                         LEFT JOIN IND_TBL_002 t02_sub ON RTRIM(LTRIM(t21_sub.Field_003)) = RTRIM(LTRIM(t02_sub.Field_008))
@@ -895,11 +907,11 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                     ) t_group ON RTRIM(LTRIM(t11.Field_005)) = RTRIM(LTRIM(t_group.ItemCode))
                     LEFT JOIN ACT_TBL_007 t07 ON RTRIM(LTRIM(t10.Field_010)) = RTRIM(LTRIM(t07.Field_005)) AND (t07.Field_004 = '11' OR t07.Field_004 = '31')
                     WHERE (
-                        (t10.Field_009 IN ('3', '12', '23') AND (t11.Field_036 = t10.Field_009 OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0') AND t11.Field_007 > 0)
+                        (t10.Field_004 = '3' AND t11.Field_007 > 0)
                         OR
-                        (t10.Field_009 IN ('13', '14') AND (t11.Field_036 IN ('3', '12', '23', '13', '14') OR t11.Field_036 IS NULL OR t11.Field_036 = '' OR t11.Field_036 = '0'))
+                        (t10.Field_004 = '4')
                       )
-                      ${dateFilterB}
+                      \${dateFilterB}
                     ORDER BY t10.Field_008 DESC
                 `;
                 const dataB = await runSayanQuery(sqlB);
@@ -935,7 +947,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const date = new Date(row.Date);
             const qty = parseFloat(row.Quantity || 0);
             const amt = parseFloat(row.Amount || 0);
-            const isReturn = row.OpCode === '13' || row.OpCode === '14';
+            const isReturn = row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14';
 
             if (isReturn) {
                 stats.rangeRetAmt += amt;
@@ -1099,7 +1111,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const key = `${inv.GroupName || ''}_${inv.ItemName || ''}`;
             const qty = parseFloat(inv.Quantity || 0);
             const amt = parseFloat(inv.Amount || 0);
-            const isReturn = inv.OpCode === '13' || inv.OpCode === '14';
+            const isReturn = inv.OpCode === '4' || inv.OpCode === '13' || inv.OpCode === '14';
 
             if (!groupedMap.has(key)) {
                 groupedMap.set(key, {
@@ -1305,7 +1317,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
             const key = `${row.GroupName || ''}_${row.ItemName || ''}`;
             const qty = parseFloat(row.Quantity || 0);
             const amt = parseFloat(row.Amount || 0);
-            const isReturn = row.OpCode === '13' || row.OpCode === '14';
+            const isReturn = row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14';
 
             if (!groupedMap.has(key)) {
                 groupedMap.set(key, {
@@ -1736,7 +1748,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
             const amt = parseFloat(row.Amount || 0);
             const qty = parseNetWeight(row);
-            if (row.OpCode === '13' || row.OpCode === '14') {
+            if (row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14') {
                 groups[key].retAmountA += amt;
                 groups[key].retWeightA += qty;
                 groups[key].netAmountA -= amt;
@@ -1760,7 +1772,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
 
             const amt = parseFloat(row.Amount || 0);
             const qty = parseNetWeight(row);
-            if (row.OpCode === '13' || row.OpCode === '14') {
+            if (row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14') {
                 groups[key].retAmountB += amt;
                 groups[key].retWeightB += qty;
                 groups[key].netAmountB -= amt;
@@ -3109,7 +3121,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                                 const key = `${row.GroupName || 'سایر'}_${row.ItemName || 'کالا'}`;
                                 const qty = parseFloat(row.Quantity || 0);
                                 const amt = parseFloat(row.Amount || 0);
-                                const isReturn = row.OpCode === '13' || row.OpCode === '14';
+                                const isReturn = row.OpCode === '4' || row.OpCode === '13' || row.OpCode === '14';
 
                                 if (!groupMap.has(key)) {
                                     groupMap.set(key, {
