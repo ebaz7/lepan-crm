@@ -2188,7 +2188,7 @@ app.get('/manifest.json', (req, res) => {
 });
 
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" || process.argv.includes("--dev")) {
     console.log("Starting in Development mode with Vite Middleware...");
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -2201,8 +2201,8 @@ if (process.env.NODE_ENV !== "production") {
         app.use(express.static(DIST_DIR, {
             maxAge: '1d',
             setHeaders: (res, filePath) => {
-                // Never cache HTML files to ensure users always get the latest build redirecting to new hashed assets
-                if (filePath.endsWith('.html')) {
+                // Never cache HTML, Service Worker, or Manifest files to ensure instant updates
+                if (filePath.endsWith('.html') || filePath.endsWith('sw.js') || filePath.endsWith('manifest.json')) {
                     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
                     res.setHeader('Pragma', 'no-cache');
                     res.setHeader('Expires', '0');
