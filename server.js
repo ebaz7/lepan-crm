@@ -2198,9 +2198,22 @@ if (process.env.NODE_ENV !== "production") {
     app.use(vite.middlewares);
 } else {
     if (fs.existsSync(DIST_DIR)) {
-        app.use(express.static(DIST_DIR, { maxAge: '1d' })); // Cache static assets
+        app.use(express.static(DIST_DIR, {
+            maxAge: '1d',
+            setHeaders: (res, filePath) => {
+                // Never cache HTML files to ensure users always get the latest build redirecting to new hashed assets
+                if (filePath.endsWith('.html')) {
+                    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                    res.setHeader('Pragma', 'no-cache');
+                    res.setHeader('Expires', '0');
+                }
+            }
+        }));
         app.get('*', (req, res) => {
             if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API endpoint not found' });
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
             res.sendFile(path.join(DIST_DIR, 'index.html'));
         });
     } else {

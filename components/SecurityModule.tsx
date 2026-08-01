@@ -149,6 +149,44 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
         }
     };
 
+    const handleFormKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === 'Enter') {
+            // Check if active element is a textarea or a button
+            if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLButtonElement) {
+                return; // Let textarea handle normal enters, let buttons be click-activated via Enter
+            }
+            e.preventDefault();
+            const container = e.currentTarget;
+            // Select all input, select, textarea elements
+            const focusables = Array.from(
+                container.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+                    'input, select, textarea'
+                )
+            ).filter(el => {
+                // Ignore disabled, readOnly, or hidden fields (offsetParent === null means invisible)
+                const isReadOnly = 'readOnly' in el ? (el as any).readOnly : false;
+                return !el.disabled && !isReadOnly && el.tabIndex !== -1 && (el as HTMLElement).offsetParent !== null;
+            });
+            
+            const index = focusables.indexOf(e.target as any);
+            if (index > -1 && index < focusables.length - 1) {
+                const nextField = focusables[index + 1];
+                nextField.focus();
+                if (nextField instanceof HTMLInputElement) {
+                    nextField.select(); // Highlight text for fast typing
+                }
+            } else if (index === focusables.length - 1) {
+                // If it is the last field, focus the submit button
+                const submitBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+                    b => b.textContent === 'ثبت گزارش' || b.textContent === 'ثبت تاخیر' || b.textContent === 'ثبت واقعه'
+                );
+                if (submitBtn) {
+                    submitBtn.focus();
+                }
+            }
+        }
+    };
+
     const startCamera = async () => {
         try {
             setCapturedImagePreview(null);
@@ -1041,7 +1079,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                     <div className="glass-panel rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">{activeTab === 'logs' ? 'ثبت ورود و خروج' : activeTab === 'delays' ? 'ثبت تاخیر پرسنل' : 'ثبت وقایع'}</h3><button onClick={resetForms}><X size={20}/></button></div>
                         {activeTab === 'logs' && (
-                            <div className="space-y-3">
+                            <div className="space-y-3" onKeyDown={handleFormKeyDown}>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div><label className="text-xs font-bold block mb-1">مبدا بارگیری</label><input className="w-full border rounded p-2" value={logForm.origin} onChange={e=>setLogForm({...logForm, origin:e.target.value})}/></div>
                                     <div><label className="text-xs font-bold block mb-1">مقصد</label><input className="w-full border rounded p-2" value={logForm.destination} onChange={e=>setLogForm({...logForm, destination:e.target.value})}/></div>
@@ -1385,7 +1423,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                             </div>
                         )}
                         {activeTab === 'delays' && (
-                            <div className="space-y-3">
+                            <div className="space-y-3" onKeyDown={handleFormKeyDown}>
                                 <div><label className="text-xs font-bold block mb-1">نام و نام خانوادگی</label><input className="w-full border rounded p-2" value={delayForm.personnelName} onChange={e=>setDelayForm({...delayForm, personnelName:e.target.value})}/></div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div><label className="text-xs font-bold block mb-1">واحد / بخش</label><input className="w-full border rounded p-2" value={delayForm.unit} onChange={e=>setDelayForm({...delayForm, unit:e.target.value})}/></div>
@@ -1400,7 +1438,7 @@ const SecurityModule: React.FC<Props> = ({ currentUser, financialYear }) => {
                             </div>
                         )}
                         {activeTab === 'incidents' && (
-                            <div className="space-y-3">
+                            <div className="space-y-3" onKeyDown={handleFormKeyDown}>
                                 <div className="flex gap-3">
                                     <div className="flex-1"><label className="text-xs font-bold block mb-1">موضوع گزارش</label><input className="w-full border rounded p-2" value={incidentForm.subject} onChange={e=>setPartialIncidentForm({...incidentForm, subject:e.target.value})}/></div>
                                     <div className="w-32"><label className="text-xs font-bold block mb-1">شماره گزارش</label><input className="w-full border rounded p-2 text-center" value={incidentForm.reportNumber} onChange={e=>setPartialIncidentForm({...incidentForm, reportNumber:e.target.value})}/></div>
