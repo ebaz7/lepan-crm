@@ -2799,7 +2799,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                         />
                     </div>
                 )}
-                {false ? (
+                {(false as boolean) && (
                     <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 gap-4">
                             <div>
@@ -3794,7 +3794,7 @@ export default function AccountingReports({ currentUser, settings }: { currentUs
                             </div>
                         </div>
                     </div>
-                ) : null}
+                )}
 
                 {/* 4. PRODUCTION TAB */}
                 {activeTab === 'production' && (
