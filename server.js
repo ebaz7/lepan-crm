@@ -848,6 +848,127 @@ app.post('/api/sayan/sales-report/send-compare', async (req, res) => {
     }
 });
 
+app.post('/api/sayan/sales-report/send-executive', async (req, res) => {
+    try {
+        const db = getDb();
+        const settings = db.settings || {};
+        const { dateFrom, dateTo, summary, groupData, customTargets, selectedPlatforms } = req.body;
+
+        const title = `داشبورد مدیریتی گزارش فروش سایان ERP (${dateFrom || 'امروز'} تا ${dateTo || 'امروز'})`;
+
+        let targets = [];
+        if (customTargets && customTargets.length > 0) {
+            targets = customTargets;
+        } else {
+            const platforms = selectedPlatforms || ['telegram', 'bale', 'whatsapp'];
+            if (platforms.includes('telegram')) {
+                if (settings.dailySalesTelegramGroupId) targets.push({ platform: 'telegram', id: settings.dailySalesTelegramGroupId });
+                if (settings.botAccountingGroupIdTele) targets.push({ platform: 'telegram', id: settings.botAccountingGroupIdTele });
+                if (settings.botAccountingGroupId) targets.push({ platform: 'telegram', id: settings.botAccountingGroupId });
+            }
+            if (platforms.includes('bale')) {
+                if (settings.dailySalesBaleGroupId) targets.push({ platform: 'bale', id: settings.dailySalesBaleGroupId });
+                if (settings.botAccountingGroupIdBale) targets.push({ platform: 'bale', id: settings.botAccountingGroupIdBale });
+            }
+            if (platforms.includes('whatsapp')) {
+                if (settings.dailySalesWhatsappGroupId) targets.push({ platform: 'whatsapp', id: settings.dailySalesWhatsappGroupId });
+                if (settings.botAccountingGroupIdWhatsApp) targets.push({ platform: 'whatsapp', id: settings.botAccountingGroupIdWhatsApp });
+            }
+        }
+
+        const uniqueTargets = [];
+        const seenMap = new Set();
+        for (const t of targets) {
+            const cleanId = utils.sanitizeGroupId(t.id);
+            if (!cleanId) continue;
+            const key = `${t.platform}_${cleanId}`;
+            if (!seenMap.has(key)) {
+                seenMap.add(key);
+                uniqueTargets.push({ platform: t.platform, id: cleanId });
+            }
+        }
+
+        if (uniqueTargets.length === 0) {
+            throw new Error('هیچ گروه مقصد معتبری برای ارسال در تنظیمات یا فرم انتخاب نشده است.');
+        }
+
+        const columns = ['ردیف', 'گروه اصلی کالا', 'وزن خالص (ک‌گ)', 'فروش خالص (ریال)', 'فی نهایی (ریال/ک‌گ)', 'سهم %'];
+        const tableRows = (groupData || []).map((g, idx) => [
+            (idx + 1).toLocaleString('fa-IR'),
+            g.name || 'سایر',
+            (g.netWgt || 0).toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+            Math.round(g.netAmt || 0).toLocaleString('fa-IR'),
+            Math.round(g.netFee || 0).toLocaleString('fa-IR'),
+            `${(g.sharePct || 0).toFixed(1)}%`
+        ]);
+
+        if (summary) {
+            tableRows.push([
+                'جمع کل',
+                '-',
+                (summary.netWeight || 0).toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+                Math.round(summary.netAmount || 0).toLocaleString('fa-IR'),
+                Math.round(summary.avgFee || 0).toLocaleString('fa-IR'),
+                '100%'
+            ]);
+        }
+
+        const pdfBuffer = await Renderer.generateReportPDF(title, columns, tableRows, true);
+        const filename = `Executive_Sales_Report_${Date.now()}.pdf`;
+
+        const caption = `📊 *گزارش مدیریتی فروش سایان ERP*
+📅 *بازه گزارش:* از ${dateFrom || '-'} تا ${dateTo || '-'}
+
+💰 *فروش خالص کل:* ${Math.round(summary?.netAmount || 0).toLocaleString('fa-IR')} ریال
+📦 *وزن خالص کل:* ${(summary?.netWeight || 0).toLocaleString('fa-IR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} کیلوگرم
+🏷️ *فی خالص میانگین:* ${Math.round(summary?.avgFee || 0).toLocaleString('fa-IR')} ریال/کیلوگرم
+🧾 *تعداد فاکتورها:* ${summary?.invoiceCount || 0} عدد | 👥 *تعداد مشتریان:* ${summary?.customerCount || 0} نفر
+💵 *میانگین هر فاکتور:* ${Math.round(summary?.avgInvoiceAmt || 0).toLocaleString('fa-IR')} ریال
+
+⭐ *پرفروش‌ترین گروه:* ${summary?.topGroup || 'نامشخص'}
+🏆 *پرفروش‌ترین کالا:* ${summary?.topProduct || 'نامشخص'}
+🔻 *میزان مرجوعی:* ${Math.round(summary?.returnAmount || 0).toLocaleString('fa-IR')} ریال (${(summary?.returnWeight || 0).toFixed(1)} ک‌گ)
+
+📎 فایل کامل PDF شامل جزئیات گروه‌های کالا پیوست گردید.`;
+
+        let successfulSends = 0;
+        let lastErr = null;
+        for (const tgt of uniqueTargets) {
+            try {
+                if (tgt.platform === 'telegram') {
+                    await telegram.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                    successfulSends++;
+                } else if (tgt.platform === 'bale') {
+                    await bale.sendBotDocument(tgt.id, pdfBuffer, filename, caption);
+                    successfulSends++;
+                } else if (tgt.platform === 'whatsapp') {
+                    const wa = await safeImport('./backend/whatsapp.js');
+                    if (wa && wa.sendMessage) {
+                        await wa.sendMessage(tgt.id, caption, {
+                            data: pdfBuffer.toString('base64'),
+                            mimeType: 'application/pdf',
+                            filename: filename
+                        });
+                        successfulSends++;
+                    }
+                }
+            } catch (e) {
+                lastErr = e.message;
+                console.error(`Failed to send executive report to ${tgt.platform} group ${tgt.id}:`, e.message);
+            }
+        }
+
+        if (successfulSends === 0) {
+            throw new Error(`ارسال گزارش به پیام‌رسان‌ها ناموفق بود: ${lastErr || 'خطای شبکه'}`);
+        }
+
+        res.json({ success: true, message: `گزارش مدیریتی با موفقیت به ${successfulSends} گروه ارسال گردید.` });
+    } catch (e) {
+        console.error("Executive Sales Report Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- SAYAN PRODUCTION REPORT ENDPOINTS ---
 const normalizeShamsiDate = (str) => {
     if (!str) return '';
